@@ -12,7 +12,7 @@ hub directory 側に置く。
 runops（`runo`）が入っていること。`lib/` は Python 3.11 以上で動き、`runo` と同じ interpreter を使う。
 
 ```bash
-git clone <this repository> ~/src/runops-hub
+git clone https://github.com/Nkzono99/runops-hub.git ~/src/runops-hub
 ~/src/runops-hub/hub init ~/work/hub      # hub directory を作る
 cd ~/work/hub
 ./hub attach flat ../project_flat emses --desc "平坦面の帯電"   # 既存の project を加える
@@ -60,3 +60,7 @@ run を変える `runo`（`new`、`submit`、`cancel` など）は hub からは
 ```
 
 テストは標準ライブラリだけで動く。`lib/*.py` は `RUNOPS_HUB_DIR`（`./hub` が設定する）を hub directory として扱う。
+
+## License
+
+Apache License 2.0. [LICENSE](LICENSE) を参照。
