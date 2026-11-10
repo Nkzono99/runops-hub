@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# Hub helper for the runops projects symlinked into one directory (the hub directory).
+# This file lives in the runops-hub repository; a hub directory holds a symlink to it.
+#   <repo>/hub init DIR      make DIR a hub directory (symlink to this script, AGENTS.md skeleton)
+#   ./hub list [--json]   ./hub context   ./hub sync   ./hub doctor   ./hub update
+#       run the same runo command in every member project (update also relinks)
+#   ./hub status [--peek]    run counts, active runs, changes since the last look, unwritten results
+#   ./hub relink [--check]   regenerate .claude/.agents skill symlinks from members
+#   ./hub new NAME SIM... --desc TEXT          create ../project_NAME with runo init and add it
+#   ./hub attach NAME PATH SIM... --desc TEXT  add an existing runops project
+#   ./hub detach NAME        drop a finished project from the hub (symlink only)
+#   ./hub term NAME          open (or re-attach) the tmux session for one project
+#   ./hub sessions           show direct tmux/claude/codex sessions per project (this node)
+# Run-changing runo commands (runo new, submit, cancel, tidy --apply, ...) are not run here:
+# cd into one project and run them there.
+set -u
+code=$(dirname "$(readlink -f "$0")")
+cmd=${1:-}
+usage='usage: ./hub {list|context|sync|doctor|update|status|relink|new|attach|detach|term|sessions} [args]
+       <repo>/hub init DIR'
+
+# lib/*.py need Python >= 3.11. The system python3 on KUDPC login nodes is 3.6, so use
+# the interpreter that runs runo itself (the uv tool env), then any python3 that is new enough.
+hubpy() {
+  local cand
+  for cand in "$(dirname "$(readlink -f "$(command -v runo 2>/dev/null || echo /nonexistent)")")/python" python3; do
+    if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+      echo "$cand"; return 0
+    fi
+  done
+  echo "!! no Python >= 3.11 found for $code/lib (install runops with uv tool, or put python3 >= 3.11 on PATH)" >&2
+  return 1
+}
+
+# Text appended to a member's AGENTS.md. A hub keeps its own in .hub/member_section.md.
+member_section() {
+  [ -f "$hub/.hub/member_section.md" ] || sed "s|{hub}|$hub|g" "$code/templates/member_section.md" > "$hub/.hub/member_section.md"
+  cat "$hub/.hub/member_section.md"
+}
+
+if [ "$cmd" = init ]; then
+  dir=${2:-}
+  [ -n "$dir" ] || { echo "$usage" >&2; exit 2; }
+  mkdir -p "$dir/.hub" || exit 1
+  hub=$(cd "$dir" && pwd -P)
+  if [ -e "$hub/hub" ] && [ "$(readlink -f "$hub/hub")" != "$code/hub" ]; then
+    echo "$hub/hub exists and is not a link to $code/hub; move it away first" >&2; exit 2
+  fi
+  ln -sfn "$code/hub" "$hub/hub"
+  [ -e "$hub/AGENTS.md" ] || cp "$code/templates/AGENTS.md" "$hub/AGENTS.md"
+  [ -e "$hub/CLAUDE.md" ] || echo "@AGENTS.md" > "$hub/CLAUDE.md"
+  member_section > /dev/null
+  echo "hub directory ready: $hub"
+  echo "add projects with ./hub new or ./hub attach; edit AGENTS.md and .hub/member_section.md to your rules"
+  exit 0
+fi
+
+# The hub directory is where the invoked link sits, not where this file is.
+hub=${RUNOPS_HUB_DIR:-$(cd "$(dirname "$0")" && pwd -P)}
+if [ "$hub" = "$code" ]; then
+  echo "this is the runops-hub repository, not a hub directory; run $code/hub init DIR, then DIR/hub" >&2
+  exit 2
+fi
+export RUNOPS_HUB_DIR=$hub
+mkdir -p "$hub/.hub"
+PY=$(hubpy) || exit 1
+relink() { "$PY" "$code/lib/relink.py" "$@"; }
+sessions() { "$PY" "$code/lib/sessions.py" || { echo "!! session listing failed (exit $?)"; return 1; }; }
+projects() { "$PY" "$code/lib/projects.py" "$@"; }
+
+# SIM... --desc TEXT (what follows the leading arguments of new / attach) -> sims, desc
+parse_sims_desc() {
+  sims=(); desc=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --desc) desc=${2:-}; shift 2 || shift ;;
+      --desc=*) desc=${1#--desc=}; shift ;;
+      *) sims+=("$1"); shift ;;
+    esac
+  done
+}
+
+case "$cmd" in
+  list|context|sync|doctor|update) ;;
+  relink) shift; relink "$@"; exit $? ;;
+  sessions) "$PY" "$code/lib/sessions.py"; exit $? ;;
+  status) shift; "$PY" "$code/lib/status.py" "$@"; exit $? ;;
+  term)
+    name=${2:-}
+    name=${name%/}
+    if [ -z "$name" ] || [ ! -f "$hub/$name/runops.toml" ]; then
+      echo "usage: ./hub term NAME   (NAME must be a member project in $hub)" >&2; exit 2
+    fi
+    dir=$(readlink -f "$hub/$name")
+    if [ -n "${TMUX:-}" ]; then
+      tmux has-session -t "=$name" 2>/dev/null || tmux new-session -d -s "$name" -c "$dir"
+      exec tmux switch-client -t "=$name"
+    fi
+    if ! tmux has-session -t "=$name" 2>/dev/null; then
+      echo "new tmux session '$name' on $(hostname) in $dir"
+      echo "start an agent there with: claude -c   (or codex resume --last)"
+    fi
+    exec tmux new-session -A -s "$name" -c "$dir" ;;
+  detach)
+    name=${2:-}
+    name=${name%/}
+    if [ -z "$name" ] || [ ! -L "$hub/$name" ]; then
+      echo "usage: ./hub detach NAME   (NAME must be a member symlink in $hub)" >&2; exit 2
+    fi
+    target=$(readlink -f "$hub/$name")
+    rm "$hub/$name" || exit 1
+    echo "detached $name ($target is untouched and stays a standalone runops project)"
+    relink
+    projects remove "$name"
+    exit 0 ;;
+  new)
+    shift
+    name=${1:-}; [ $# -gt 0 ] && shift
+    parse_sims_desc "$@"
+    if ! [[ "$name" =~ ^[a-z][a-z0-9_]*$ ]] || [ ${#sims[@]} -eq 0 ] || [ -z "$desc" ]; then
+      echo 'usage: ./hub new NAME SIM... --desc "one-line goal"   (NAME: lower_snake_case; SIM: emses, beach, generic, ...)' >&2
+      exit 2
+    fi
+    dir="$(dirname "$hub")/project_$name"
+    if [ -e "$hub/$name" ] || [ -e "$dir" ]; then
+      echo "$hub/$name or $dir already exists" >&2; exit 2
+    fi
+    mkdir "$dir" || exit 1
+    echo "===== runo init ${sims[*]} in $dir"
+    if ! (cd "$dir" && runo init "${sims[@]}" -y); then
+      echo "!! runo init failed; $dir is left as is (not added to the hub)" >&2; exit 1
+    fi
+    { echo; member_section; } >> "$dir/AGENTS.md"
+    ln -s "../project_$name" "$hub/$name"
+    projects add "$name" "$(IFS=,; echo "${sims[*]}")" "$desc"
+    relink
+    echo "created $name -> $dir"
+    exit 0 ;;
+  attach)
+    shift
+    name=${1:-}; path=${2:-}; [ $# -gt 1 ] && shift 2
+    parse_sims_desc "$@"
+    if ! [[ "$name" =~ ^[a-z][a-z0-9_]*$ ]] || [ ! -f "$path/runops.toml" ] || [ ${#sims[@]} -eq 0 ] || [ -z "$desc" ]; then
+      echo 'usage: ./hub attach NAME PATH SIM... --desc "one-line goal"   (PATH: an existing runops project)' >&2
+      exit 2
+    fi
+    if [ -e "$hub/$name" ] || [ -L "$hub/$name" ]; then
+      echo "$hub/$name already exists" >&2; exit 2
+    fi
+    dir=$(cd "$path" && pwd -P)
+    ln -s "$(realpath --relative-to="$hub" "$dir")" "$hub/$name" || exit 1
+    grep -q '^## runops hub$' "$dir/AGENTS.md" 2>/dev/null || { echo; member_section; } >> "$dir/AGENTS.md"
+    projects add "$name" "$(IFS=,; echo "${sims[*]}")" "$desc"
+    relink
+    echo "attached $name -> $dir"
+    exit 0 ;;
+  *) echo "$usage" >&2; exit 2 ;;
+esac
+
+# runo tables wrap to 80 columns when piped (e.g. by an agent); widen them.
+[ -t 1 ] || export COLUMNS=${COLUMNS:-200}
+status=0
+if [ "$cmd" = list ] || [ "$cmd" = context ]; then
+  sessions || status=1
+fi
+for link in "$hub"/*/; do
+  [ -f "$link/runops.toml" ] || continue
+  name=$(basename "$link")
+  echo "===== $name ($(readlink -f "$link"))"
+  (cd "$link" && runo "$@") || { echo "!! $name: runo $cmd failed (exit $?)"; status=1; }
+done
+if [ "$cmd" = update ]; then
+  echo "===== relink"
+  relink || status=1
+fi
+if [ "$cmd" = doctor ]; then
+  echo "===== hub skill links"
+  relink --check || status=1
+fi
+exit $status
