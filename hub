@@ -5,7 +5,10 @@
 #   ./hub list [--json]   ./hub context   ./hub sync   ./hub doctor   ./hub update
 #       run the same runo command in every member project (update also relinks)
 #   ./hub status [--peek]    run counts, active runs, changes since the last look, unwritten results
-#   ./hub relink [--check]   regenerate .claude/.agents skill symlinks from members
+#   ./hub board              write board.html: what waits for the person, each line of work, runs
+#       (./hub sync rewrites it too)
+#   ./hub relink [--check]   regenerate .claude/.agents skill symlinks from members, and keep the
+#       real paths of members and papers/* in .claude/settings.json permissions.additionalDirectories
 #   ./hub new NAME SIM... --desc TEXT          create ../project_NAME with runo init and add it
 #   ./hub attach NAME PATH SIM... --desc TEXT  add an existing runops project
 #   ./hub detach NAME        drop a finished project from the hub (symlink only)
@@ -16,7 +19,7 @@
 set -u
 code=$(dirname "$(readlink -f "$0")")
 cmd=${1:-}
-usage='usage: ./hub {list|context|sync|doctor|update|status|relink|new|attach|detach|term|sessions} [args]
+usage='usage: ./hub {list|context|sync|doctor|update|status|board|relink|new|attach|detach|term|sessions} [args]
        <repo>/hub init DIR'
 
 # lib/*.py need Python >= 3.11. The system python3 on KUDPC login nodes is 3.6, so use
@@ -85,6 +88,7 @@ case "$cmd" in
   relink) shift; relink "$@"; exit $? ;;
   sessions) "$PY" "$code/lib/sessions.py"; exit $? ;;
   status) shift; "$PY" "$code/lib/status.py" "$@"; exit $? ;;
+  board) shift; "$PY" "$code/lib/board.py" "$@"; exit $? ;;
   term)
     name=${2:-}
     name=${name%/}
@@ -169,6 +173,10 @@ for link in "$hub"/*/; do
   echo "===== $name ($(readlink -f "$link"))"
   (cd "$link" && runo "$@") || { echo "!! $name: runo $cmd failed (exit $?)"; status=1; }
 done
+# The board is derived from what sync just refreshed; a failure here does not fail the sync.
+if [ "$cmd" = sync ]; then
+  "$PY" "$code/lib/board.py" --quiet || echo "!! board.html was not rewritten (exit $?)"
+fi
 if [ "$cmd" = update ]; then
   echo "===== relink"
   relink || status=1

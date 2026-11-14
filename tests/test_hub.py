@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import tempfile
@@ -62,6 +63,42 @@ class HubTest(unittest.TestCase):
         self.assertEqual(len(notes), 1)
         relink.apply(relink.plan(chosen)[0])
         self.assertEqual(os.readlink(self.hub / ".claude" / "skills" / "runops-x"), "../../b/.claude/skills/runops-x")
+
+    def test_relink_keeps_the_real_paths_of_members_and_papers_as_working_directories(self) -> None:
+        project = member(self.hub, "a")
+        paper = self.hub.parent / "paper-x"
+        paper.mkdir()
+        (self.hub / "papers").mkdir()
+        (self.hub / "papers" / "x").symlink_to("../../paper-x")
+        settings = self.hub / ".claude" / "settings.json"
+        settings.parent.mkdir(exist_ok=True)
+        settings.write_text(json.dumps({"model": "opus", "permissions": {
+            "allow": ["Bash(cd *)"], "additionalDirectories": ["/by/hand"]}}), encoding="utf-8")
+        relink = load("relink", self.hub)
+        self.assertEqual(relink.main([]), 0)
+        data = json.loads(settings.read_text(encoding="utf-8"))
+        self.assertEqual(data["model"], "opus")
+        self.assertEqual(data["permissions"]["allow"], ["Bash(cd *)"])
+        self.assertEqual(data["permissions"]["additionalDirectories"],
+                         ["/by/hand", str(project.resolve()), str(paper.resolve()), str(REPO)])
+        self.assertEqual(relink.main(["--check"]), 0)  # nothing left to change
+        (self.hub / "a").unlink()
+        member(self.hub, "b")
+        self.assertEqual(relink.main(["--check"]), 1)
+        self.assertEqual(relink.main([]), 0)
+        dirs = json.loads(settings.read_text(encoding="utf-8"))["permissions"]["additionalDirectories"]
+        self.assertNotIn(str(project.resolve()), dirs)
+        self.assertIn("/by/hand", dirs)
+        self.assertIn(str((self.hub.parent / "project_b").resolve()), dirs)
+
+    def test_relink_leaves_unreadable_settings_alone(self) -> None:
+        member(self.hub, "a")
+        settings = self.hub / ".claude" / "settings.json"
+        settings.parent.mkdir(exist_ok=True)
+        settings.write_text("{not json", encoding="utf-8")
+        relink = load("relink", self.hub)
+        self.assertEqual(relink.main([]), 0)
+        self.assertEqual(settings.read_text(encoding="utf-8"), "{not json")
 
 
 if __name__ == "__main__":

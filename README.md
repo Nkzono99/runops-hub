@@ -28,6 +28,7 @@ cd ~/work/hub
 | `AGENTS.md`、`CLAUDE.md` | agent 向けの入口。project の表は `new`・`attach`・`detach` が保つ。規則は自分の運用に合わせて書き足す |
 | `.hub/member_section.md` | `new`・`attach` が各 project の `AGENTS.md` に足す節 |
 | `.hub/status_seen.json` | `./hub status` が最後に見た run の状態（自動で作られる） |
+| `board.html` | `./hub board` と `./hub sync` が作り直す、人が見る 1 枚（自動で作られる） |
 
 ## command
 
@@ -35,8 +36,9 @@ cd ~/work/hub
 |---|---|
 | `./hub sync` / `list [--json]` / `context` / `doctor` / `update` | 全 project で同じ `runo` を実行する |
 | `./hub status [--peek]` | 全 project の件数と active run、前回の確認以降に状態が変わった run、完了後に記録が無い run |
+| `./hub board` | 人が見る `board.html` を hub directory に作る（試作）。各 project の「分かっていること」（結論、図、図の読み方）と「まだ分かっていないこと」。`./hub sync` のたびにも作り直す。元になる表の書式は `lib/board.py` の冒頭 |
 | `./hub sessions` | この node で各 project に開いている tmux・claude・codex |
-| `./hub relink [--check] [-v]` | hub の skill link を全 project の和集合から作り直す（同名は version が新しいもの） |
+| `./hub relink [--check] [-v]` | hub の skill link を全 project の和集合から作り直す（同名は version が新しいもの）。あわせて、member と `papers/*` の実体 directory とこの repository を `.claude/settings.json` の `permissions.additionalDirectories` に揃える（symlink 先は Claude Code の作業 directory の外なので、そのままでは auto mode でも書き込みのたびに確認が出る）。手で足した directory と他の設定は残し、外れた member の分だけ消す（管理する一覧は `.hub/permission_dirs.json`） |
 | `./hub new NAME SIM... --desc TEXT` | `../project_NAME` に `runo init` して加える |
 | `./hub attach NAME PATH SIM... --desc TEXT` | 既にある runops project を加える |
 | `./hub detach NAME` | hub から外す（symlink と表の行だけを消す） |
@@ -54,6 +56,11 @@ run を変える `runo`（`new`、`submit`、`cancel` など）は hub からは
   粗い目安で、結論が書かれたことまでは確かめない。
 
 ## 開発
+
+board の表示名は、各 `analysis/README.md` の `<!-- board -->` の直後、最初の `###` より前に
+`- 表示名: 地形上の導体` のように置けます。省略時は directory 名を使います。
+問い → 結論 → 図の読み方 → 図 → 解釈・限界 → 出典の順に表示し、図はクリックで原寸表示できます。
+目次・図の拡大・配色は単体HTMLの中で動き、外部のフォントやライブラリには依存しません。
 
 ```bash
 "$(dirname "$(readlink -f "$(command -v runo)")")/python" -m unittest discover -s tests -t tests
