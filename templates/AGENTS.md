@@ -6,6 +6,29 @@
 | dir | simulator | 内容 |
 |---|---|---|
 
+## 最初の依頼を受けた agent へ
+
+人が行う準備は hub の `init` と、この directory で agent を起動するところまで。
+project の追加・作成、runops の準備、以後の操作は agent が行う。人に `attach` などの
+コマンドを実行してもらう前提にせず、依頼の path と目的を使って作業する。
+
+1. `runo` が使えるか確認する。無ければ agent が次を実行し、tool の bin directory を
+   この session の PATH に加える。既に使える runops は、この準備のために更新しない。
+
+   ```bash
+   uv tool install --python 3.11 --from git+https://github.com/Nkzono99/runops runops
+   export PATH="$(uv tool dir --bin):$PATH"
+   ```
+
+2. 既存 project を加える依頼なら、指定された directory の `runops.toml` と `AGENTS.md` を読む。
+   simulator と目的を確かめ、`./hub attach NAME PATH SIM... --desc "目的"` で加える。
+   名前や説明は内容から決められる範囲で決める。path や対象が不明なら、その不足だけを聞く。
+3. 新しい計算を始める依頼なら、まず既存 project の続きで扱えるか調べる。
+   新規なら `./hub new NAME SIM... --desc "目的"` を使い、作成先の `AGENTS.md` と `runo context` に従う。
+   simulator の設定・計算資源・投入の確認は project 側の規則に従う。
+4. 追加後は `./hub context` と `./hub relink --check` で入口と skill を確かめ、
+   何を加えたかと次にできることを短く返す。以後も自然文の依頼を hub / project の操作へ移す。
+
 ## 作業の進め方
 
 - **project を決めてから動く。** run を変える依頼で project が分からなければ、`./hub list` で状況を見せて対象を確かめる。

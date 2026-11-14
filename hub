@@ -22,11 +22,12 @@ cmd=${1:-}
 usage='usage: ./hub {list|context|sync|doctor|update|status|board|relink|new|attach|detach|term|sessions} [args]
        <repo>/hub init DIR'
 
-# lib/*.py need Python >= 3.11. The system python3 on KUDPC login nodes is 3.6, so use
-# the interpreter that runs runo itself (the uv tool env), then any python3 that is new enough.
+# lib/*.py need Python >= 3.11. Prefer the interpreter recorded by uvx init, then
+# runo's interpreter and python3 (the system python3 on KUDPC login nodes is 3.6).
 hubpy() {
-  local cand
-  for cand in "$(dirname "$(readlink -f "$(command -v runo 2>/dev/null || echo /nonexistent)")")/python" python3; do
+  local cand saved=""
+  [ ! -f "$hub/.hub/python" ] || IFS= read -r saved < "$hub/.hub/python"
+  for cand in "$saved" "$(dirname "$(readlink -f "$(command -v runo 2>/dev/null || echo /nonexistent)")")/python" python3; do
     if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
       echo "$cand"; return 0
     fi
@@ -54,7 +55,7 @@ if [ "$cmd" = init ]; then
   [ -e "$hub/CLAUDE.md" ] || echo "@AGENTS.md" > "$hub/CLAUDE.md"
   member_section > /dev/null
   echo "hub directory ready: $hub"
-  echo "add projects with ./hub new or ./hub attach; edit AGENTS.md and .hub/member_section.md to your rules"
+  echo "open Codex or Claude Code in this directory; AGENTS.md explains how the agent attaches or creates projects"
   exit 0
 fi
 
