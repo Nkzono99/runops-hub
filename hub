@@ -14,12 +14,13 @@
 #   ./hub detach NAME        drop a finished project from the hub (symlink only)
 #   ./hub term NAME          open (or re-attach) the tmux session for one project
 #   ./hub sessions           show direct tmux/claude/codex sessions per project (this node)
+#   ./hub logs [DIR [--apply]]  list job log locations or collect loose logs in DIR/logs/
 # Run-changing runo commands (runo new, submit, cancel, tidy --apply, ...) are not run here:
 # cd into one project and run them there.
 set -u
 code=$(dirname "$(readlink -f "$0")")
 cmd=${1:-}
-usage='usage: ./hub {list|context|sync|doctor|update|status|board|relink|new|attach|detach|term|sessions} [args]
+usage='usage: ./hub {list|context|sync|doctor|update|status|board|relink|new|attach|detach|term|sessions|logs} [args]
        <repo>/hub init DIR'
 
 # lib/*.py need Python >= 3.11. Prefer the interpreter recorded by uvx init, then
@@ -52,6 +53,9 @@ if [ "$cmd" = init ]; then
   fi
   ln -sfn "$code/hub" "$hub/hub"
   [ -e "$hub/AGENTS.md" ] || cp "$code/templates/AGENTS.md" "$hub/AGENTS.md"
+  if [ ! -e "$hub/.vscode/settings.json" ] && [ ! -L "$hub/.vscode/settings.json" ]; then
+    mkdir -p "$hub/.vscode" && cp -n "$code/templates/vscode-settings.json" "$hub/.vscode/settings.json" || exit 1
+  fi
   [ -e "$hub/CLAUDE.md" ] || echo "@AGENTS.md" > "$hub/CLAUDE.md"
   member_section > /dev/null
   echo "hub directory ready: $hub"
@@ -90,6 +94,7 @@ case "$cmd" in
   sessions) "$PY" "$code/lib/sessions.py"; exit $? ;;
   status) shift; "$PY" "$code/lib/status.py" "$@"; exit $? ;;
   board) shift; "$PY" "$code/lib/board.py" "$@"; exit $? ;;
+  logs) shift; "$PY" "$code/lib/logs.py" "$@"; exit $? ;;
   term)
     name=${2:-}
     name=${name%/}

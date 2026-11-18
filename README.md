@@ -67,6 +67,7 @@ hub 本体の更新も「hub を最新版にして」と agent に頼めばよ�
 | `./hub status [--peek]` | 全 project の件数と active run、前回の確認以降に状態が変わった run、完了後に記録が無い run |
 | `./hub board` | 人が見る `board.html` を hub directory に作る（試作）。各 project の「分かっていること」（結論、図、図の読み方）と「まだ分かっていないこと」。`./hub sync` のたびにも作り直す。元になる表の書式は `lib/board.py` の冒頭 |
 | `./hub sessions` | この node で各 project に開いている tmux・claude・codex |
+| `./hub logs [DIR [--apply]]` | hub・各 project・論文のジョブ番号付きログを場所別に数える。`DIR` を指定するとその直下の整理候補を表示し、`--apply` で同じ場所の `logs/` に集める。 |
 | `./hub relink [--check] [-v]` | skill の link と、project・論文の実体 directory に対する Claude Code の設定を揃える |
 | `./hub detach NAME` | hub から外す（symlink と表の行だけを消す） |
 | `./hub term NAME` | project の tmux session に入る |
@@ -86,6 +87,20 @@ uvx --refresh --from git+https://github.com/Nkzono99/runops-hub runops-hub init 
 member と `papers/*` の実体 directory、hub のコードの場所は `.claude/settings.json` の
 `permissions.additionalDirectories` に加える。他の設定と手で足した directory は残し、
 外れた member の分だけ消す。管理する一覧は `.hub/permission_dirs.json` に保存する。
+
+### ジョブログの整理
+
+`./hub logs` は解析・図・論文の build や hub のレビューを走査し、番号付きの `.out`・`.err`・`.log` と、それ以外の `.log` を数える。通常は番号付きログが作業ファイルに混在する場所を表示する。`--all-dirs` ですでに整理済みの場所と番号なしログの場所も表示する。run の中は解析ディレクトリと `work/` 直下を数え、シミュレーション出力の下位ディレクトリには入らない。例えば次の順で確認して移せる。
+
+```bash
+./hub logs
+./hub logs dust_charging/analysis/zenith-angle-dependence-20261104
+./hub logs dust_charging/analysis/zenith-angle-dependence-20261104 --apply
+```
+
+指定したディレクトリの直下で、Git 管理外かつ `sacct` で終了を確認できたファイルを、同じ名前で `logs/` へ移す。失敗したジョブも対象。同名の別ファイル、runops の実行ログ、既存の `logs/` は保持する。外部の文書から直リンクしているファイルは移動するとパスが変わる。
+
+新しいジョブでは投入前に出力先を作り、解析ならその解析の `logs/`、PDF なら論文の `build/logs/` に標準出力・エラーを指定する。hub を VS Code で開くと、ワークスペースの `files.exclude` が解析、図、run の作業場所などにあるジョブログをエクスプローラーから隠す。表示は `.vscode/settings.json` で切り替えられる。hub の初期化時には既存の VS Code 設定を優先する。
 
 ### `./hub status` の 2 つの表示
 

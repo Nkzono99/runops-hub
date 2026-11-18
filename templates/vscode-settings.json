@@ -1,0 +1,11 @@
+{
+    "files.exclude": {
+        "**/*[-.][0-9][0-9][0-9][0-9][0-9]*.{out,err,log}": true,
+        "**/slurm-*.out": true,
+        "**/logs/**/*.{log,out,err}": true,
+        "**/{analysis,_analysis}/**/{create-*,native-check-*,preflight*,config-check,plot,render,reduce,verify,run,stdout,stderr}.log": true,
+        "**/build/**/*.o.log": true,
+        "**/work/{stdout,stderr}.log": true,
+        "**/build/**/main.{log,blg,out}": true
+    }
+}

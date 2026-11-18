@@ -28,6 +28,8 @@ def check(artifact: Path, uv: str, base: Path) -> dict:
     run(*init)
     assert (workspace / ".hub/runtime/templates/AGENTS.md").is_file()
     assert (workspace / ".hub/runtime/lib/board.py").is_file()
+    run("bash", str(workspace / "hub"), "logs")
+    assert (workspace / ".vscode/settings.json").is_file()
     assert os.readlink(workspace / "hub") == ".hub/runtime/hub"
     shutil.rmtree(cache)
     run("bash", str(workspace / "hub"), "board")
