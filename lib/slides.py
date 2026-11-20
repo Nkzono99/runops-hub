@@ -23,8 +23,10 @@ A card says what a slide shows; this file decides where things go. The figure ge
 area under the title, and the text goes under a wide figure or beside a tall one, whichever
 leaves the figure larger. Names of panels and curves, and the values a claim rests on, belong
 on the figure (``marks``, or a figure drawn for the slide), not in the text. A slide can show
-a table instead of a figure (``table = "x.csv"``), set in the largest type that fits. The source
-of a card is recorded in card.toml and is not shown. Text heights are measured by Typst first
+a table instead of a figure (``table = "x.csv"``), set in the largest type that fits. A figure
+made, even in part, by an image-generation model carries ``ai_image = "tool"`` in its card and
+gets a fixed mark on the slide, so it is never taken for a plot of results. The source of a card
+is recorded in card.toml and is not shown. Text heights are measured by Typst first
 (``typst query``), so the choice uses real line breaks.
 
 ``build`` exits 1 when a check fails (text that does not fit, a title that is empty or longer
@@ -71,6 +73,7 @@ NUMBER_CELL = re.compile(r"^[+\-−]?\d+(?:[.,]\d+)?\s*%?$")
 FONTS = ("Noto Sans CJK JP", "Noto Sans JP", "Hiragino Sans", "Yu Gothic")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 DECK_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+AI_MARK = "生成AI画像"          # shown on a figure whose card says ai_image
 KINDS = {"new": "新規", "recap": "おさらい"}
 INDEX_HEADER = "| card | 区分 | タイトル | 追加日 |\n|---|---|---|---|\n"
 
@@ -209,7 +212,7 @@ def load_pages(deck: Path, sections: list[dict], problems: list[str]) -> list[di
                     "kind": card.get("kind", "new"),
                     "title": fig.get("title") or str(card.get("title", "")) + (f"：{fig['label']}" if fig.get("label") else ""),
                     "text": fig.get("text") or (card.get("text", {}) if n == 0 else {}),
-                    "marks": fig.get("marks", []), "figure": None, "inset": None,
+                    "marks": fig.get("marks", []), "figure": None, "inset": None, "ai_image": bool(fig.get("ai_image")),
                 }
                 if fig.get("file"):
                     path = cdir / fig["file"]
@@ -383,6 +386,9 @@ def page_typst(page: dict, lay: dict, number: int, root: Path) -> str:
             marks = "".join(mark_typst(m, fw, fh) for m in page["marks"])
         except KeyError as exc:
             die(f"{page['id']}: a mark lacks {exc}")
+        if page["ai_image"]:
+            marks += (f"#place(bottom + right, dx: -4pt, dy: -4pt, box(fill: white.transparentize(8%), stroke: 0.7pt + muted, "
+                      f"inset: (x: 6pt, y: 3pt), radius: 2pt, text(size: 11pt, fill: muted, {lit(AI_MARK)})))")
         out.append(f"#at({x:.1f}, {y:.1f})[#box(width: {fw:.1f}pt, height: {fh:.1f}pt)[#place(top + left, image({lit(rel(page['figure'], root))}, width: {fw:.1f}pt, height: {fh:.1f}pt, fit: \"stretch\")){marks}]]")
     if "table" in lay:
         x, y, size = lay["table"]
@@ -531,13 +537,16 @@ def cmd_build(argv: list[str]) -> int:
             notes.append("元の図が写しの後に更新されている")
         report.append({"page": n, "id": p["id"], "section": p["section"], "kind": p["kind"], "title": p["title"],
                        "layout": lay["mode"], "figure_share": round(share, 3) if share else None,
-                       "text_chars": chars, "notes": notes})
+                       "text_chars": chars, "ai_image": p["ai_image"], "notes": notes})
     (out / "deck.typ").write_text("\n".join(body) + "\n", encoding="utf-8")
     for old in (out / "png").glob("*.png"):
         old.unlink()
     # Untagged: an older poppler reports a syntax error for the tags Typst writes by default.
     run(typst + ["compile", "--no-pdf-tags"] + common + [str(out / "deck.typ"), str(out / "deck.pdf")])
     run(typst + ["compile"] + common + ["--ppi", "144", str(out / "deck.typ"), str(out / "png" / "{0p}.png")])
+    for f in (out / "png").glob("*.png"):   # Typst pads to the digits of the page count: keep at least two
+        if f.stem.isdigit() and len(f.stem) < 2:
+            f.rename(f.with_name(f"{int(f.stem):02d}.png"))
     made = len(list((out / "png").glob("*.png")))
     if made != len(report) + 2:
         problems.append(f"ページ数が合わない（{made} 枚、予定は {len(report) + 2} 枚）")
@@ -549,6 +558,9 @@ def cmd_build(argv: list[str]) -> int:
     for r in report:
         share = f"{r['figure_share']:.0%}" if r["figure_share"] else " - "
         print(f"  {r['page']:>2} {r['layout']:<7} 図{share:>4} 文{r['text_chars']:>4}字  {r['id']}" + ("  ※ " + "、".join(r["notes"]) if r["notes"] else ""))
+    marked = [r["page"] for r in report if r.get("ai_image")]
+    if marked:
+        print(f"  「{AI_MARK}」の印: {', '.join(str(n) for n in marked)} 枚目")
     for msg in problems:
         print(f"  !! {msg}")
     return 1 if problems else 0
@@ -633,8 +645,10 @@ def board_row(member: Path, text: str) -> dict:
 
 
 def origin_of(path: Path, members: dict[str, Path]) -> str:
-    """Where a figure came from, written from the hub: through the member link when it is in a project."""
-    for link in members.values():
+    """Where a figure came from, written from the hub: through the link when it is in a member project or a paper."""
+    papers = HUB / "papers"
+    links = list(members.values()) + (sorted(p for p in papers.iterdir() if p.is_symlink()) if papers.is_dir() else [])
+    for link in links:
         real = link.resolve()
         if real in path.parents:
             return f"{link.relative_to(HUB).as_posix()}/{path.relative_to(real).as_posix()}"
@@ -719,7 +733,8 @@ def cmd_add(argv: list[str]) -> int:
         shutil.copy2(path, cdir / name)
         origin = origin_of(path, members)
         blocks.append(f"[[figures]]\nfile = {toml_str(name)}\nfrom = {toml_str(origin)}        # 元の図（hub からの path）\n"
-                      f"sha256 = {toml_str(sha256(path))}\n")
+                      f"sha256 = {toml_str(sha256(path))}\n"
+                      '# ai_image = "道具の名前"   # 画像生成 AI で作った絵なら書く（スライドに印が出る）\n')
     kind = "recap" if args.recap or args.library else "new"
     card = (notes + ("\n" if notes else "")
             + f"section = {toml_str(args.section)}\nkind = {toml_str(kind)}          # new（新規）| recap（おさらい）\n"
