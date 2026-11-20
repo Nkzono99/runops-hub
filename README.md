@@ -1,13 +1,29 @@
-# runops-hub
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/hero-dark.svg">
+  <img alt="runops-hub: 実験・論文・進捗スライドを、1 つの入口からラインで回す。hub/ の下に projects/（runops）、papers/（paperops）、slides/（typst）と board.html が並んでいる。" src=".github/assets/hero-light.svg" width="100%">
+</picture>
 
-複数の [runops](https://github.com/Nkzono99/runops) project を、1 つの directory で agent と一緒に扱うための入口。
-人が hub を初期化し、その後の project の追加・作成・進捗確認・解析は agent に自然文で頼む。
-各 project は `projects/<名前>/` に symlink で並び、それぞれ単独でも使える。
+<p>
+  <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-%E2%89%A53.11-3a6b8c" alt="Python"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-5b6670" alt="License"></a>
+</p>
+
+runops-hub は、[runops](https://github.com/Nkzono99/runops) や `paperops` を個別に直接操作せず、
+1 つの directory から AI エージェントと一緒に研究全体を回すための入口です。人が打つコマンドは最初の
+`runops-hub init` だけで、実験・論文・進捗スライドを工場のラインのようにつなげて進められます。
+
+## 実験から論文・スライドまで
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/pipeline-dark.svg">
+  <img alt="1 つの hub から自然文で、01 実験・解析（projects/・runops）→ board.html → 02 論文（papers/・paperops）→ 03 進捗スライド（slides/・typst）が流れ、論文から実験へ「進捗確認・課題 → 次の実験計画」のフィードバックが戻る。" src=".github/assets/pipeline-light.svg" width="100%">
+</picture>
+
+- **実験・解析（`projects/`）**: 複数 project の計算と解析を横断して把握し、分かった結論・図・残っている問いを `board.html` に集約します。
+- **論文（`papers/`）**: 執筆や図表管理だけでなく、論文の構成と執筆状況から進捗・課題・不足している根拠を見つけて、次の実験計画へ戻します。
+- **進捗スライド（`slides/`）**: `board.html` や論文の結果を 1 枚ずつの card にして Typst で PDF 化します。発表後は archive し、次回は差分だけで作れます。
 
 ## はじめる
-
-Linux 上で Git と [uv](https://docs.astral.sh/uv/getting-started/installation/) が使えること。
-次を実行して、作成した directory で Codex または Claude Code を起動する。
 
 ```bash
 uvx --from git+https://github.com/Nkzono99/runops-hub runops-hub init ~/work/hub
@@ -15,134 +31,48 @@ cd ~/work/hub
 codex  # Claude Code なら claude
 ```
 
-`init` の path を省略すると、現在の directory に作る。
-repository の clone や runops の事前インストールは不要。
-`AGENTS.md` に agent 用の手順が入り、必要な runops の準備も agent が行う。
+Linux 上で Git と [uv](https://docs.astral.sh/uv/getting-started/installation/) があれば動きます。
+`init` の path を省略すると現在の directory に作ります。repository の clone や `runops` の事前
+インストールは不要で、`AGENTS.md`（Claude Code 向けに `CLAUDE.md`）に手順が入り、必要な準備も
+エージェントが行います。hub 本体の更新も「hub を最新版にして」と頼めば、規則や記録を残したまま
+更新されます。
 
-あとは、例えば次のように依頼する。人が `attach` の書式や simulator の名前を調べる必要はない。
+## 頼めること
 
-> `/data/project_crater` の計算を、この hub から扱えるようにして。
+| やりたいこと | 頼み方の例 |
+|---|---|
+| 既存 project をつなぐ | `/data/project_crater` の計算を、この hub から扱えるようにして |
+| 全体の様子を見る | いま動いている計算の進捗と、完了後に未整理の run をまとめて教えて |
+| 論文から次の一手を考える | `papers/sheath` の進捗と課題を確認して、次に必要な実験計画を立てて |
+| 結果をまとめて比較する | 平坦面とクレーターの結果を比べて、図と `board.html` にまとめて |
+| 進捗スライドを作る | クレーターの比較結果を次回の進捗スライドに追加して、PDF にして |
+| 新しく計算を始める | 月面のダスト帯電を調べたい。既存 project で扱えるか見て、必要なら作って |
+| 更新する | hub 本体と各 project の runops を最新にして |
 
-> いま動いている計算の進捗を、まとめて教えて。
+対象や目的が不足するときはエージェントが確認し、計算の投入は各 project の規則に従います。
+裏で動く `./hub` コマンドの詳細は [コマンド・運用リファレンス](docs/reference.md) にあります。
 
-> 平坦面とクレーターの結果を比べて、図とレポートにまとめて。
-
-> 新しく月面のダスト帯電を調べたい。既存 project で扱えるか見て、必要なら project を作って。
-
-agent は依頼先の設定と規則を読み、hub への追加と skill の設定を行う。
-対象や目的が不足するときはその点を確認し、計算の投入は各 project の規則に従う。
-
-## 作成される directory
+## hub の中身
 
 ```text
 hub/
-├── AGENTS.md           # agent の入口。project の一覧と作業の規則
-├── CLAUDE.md           # Claude Code からも同じ規則を読む
-├── hub                 # 以後、agent が使う ./hub
-├── projects/           # 各 project への symlink（例: projects/crater/）
-└── .hub/
-    ├── runtime/        # hub のコードとテンプレート
-    ├── python          # hub 用 Python の実体 path
-    └── member_section.md
+├── AGENTS.md, CLAUDE.md   エージェントの入口。project 一覧と作業の規則
+├── hub                    エージェントが使う ./hub
+├── board.html             全 project の「分かっていること / 残る問い」（sync で更新）
+├── projects/              各 runops project への symlink（例: projects/crater/）
+├── papers/                各 paperops 論文への symlink（例: papers/sheath/）
+├── slides/                進捗スライドの deck・card・archive
+└── .hub/                  hub 本体のコード・Python path・状態
 ```
 
-hub のコードはこの directory に保存する。`uvx` のキャッシュを削除しても `./hub` は使える。
-Python は uvx の仮想環境への symlink を解決して記録し、通常の Python 3.11 以上も利用できる。
-project の一覧・規則・記録はここに置き、run や解析の結果は各 project に置く。
-`board.html` は、agent が確認した結論・図・残っている問いをまとめるページで、`sync` の際に生成される。
+一覧・規則・`board.html`・`slides/` は hub に置き、run や解析・論文の実体は各 directory に
+残します。`projects/` と `papers/` は symlink なので、それぞれを直接開いて単独で使うことも
+そのままできます。hub 本体のコードは `.hub/runtime/` に保存するため、`uvx` のキャッシュを削除
+しても `./hub` は動きます。
 
-hub 本体の更新も「hub を最新版にして」と agent に頼めばよい。
-初期化を再実行しても、編集した規則や追加済み project、論文、記録は保持する。
-既存の clone 方式で作った hub も、そのまま使える。
+---
 
-## agent 向けの操作
-
-普段の依頼では、この表のコマンドを人が実行する必要はない。
-生成した hub の `AGENTS.md` が、runops の準備から project 追加後の確認までを案内する。
-
-| command | 用途 |
-|---|---|
-| `./hub attach NAME PATH SIM... --desc TEXT` | 既存の runops project を加える |
-| `./hub new NAME SIM... --desc TEXT` | `../project_NAME` に新しい project を作る |
-| `./hub sync` / `list [--json]` / `context` / `doctor` / `update` | 全 project で同じ `runo` を実行する |
-| `./hub status [--peek]` | 全 project の件数と active run、前回の確認以降に状態が変わった run、完了後に記録が無い run |
-| `./hub board` | 人が見る `board.html` を hub directory に作る（試作）。各 project の「分かっていること」（結論、図、図の読み方）と「まだ分かっていないこと」。`./hub sync` のたびにも作り直す。元になる表の書式は `lib/board.py` の冒頭 |
-| `./hub sessions` | この node で各 project に開いている tmux・claude・codex |
-| `./hub logs [DIR [--apply]]` | hub・各 project・論文のジョブ番号付きログを場所別に数える。`DIR` を指定するとその直下の整理候補を表示し、`--apply` で同じ場所の `logs/` に集める。 |
-| `./hub slides [status\|new\|add\|build\|archive]` | 進捗スライドを `slides/` に作る。結果 1 つを card（`card.toml` と図）にして project ごとの節に足し、Typst で PDF と 1 枚ごとの PNG にする。書式は `lib/slides.py` の冒頭、作り方は `skills/hub-slides/SKILL.md` |
-| `./hub relink [--check] [-v]` | skill の link と、project・論文の実体 directory に対する Claude Code の設定を揃える |
-| `./hub detach NAME` | hub から外す（symlink と表の行だけを消す） |
-| `./hub term NAME` | project の tmux session に入る |
-
-旧形式の hub 直下にある project も検出する。同名のリンクが両方にある場合は `projects/` 側を使う。
-
-run を変える `runo`（`new`、`submit`、`cancel` など）は対象の project に `cd` して実行する。
-`./hub update` は各 project の runops の更新であり、hub 本体の更新は次を使う。
-
-```bash
-uvx --refresh --from git+https://github.com/Nkzono99/runops-hub runops-hub init /path/to/hub
-```
-
-この再初期化は uvx 方式で作った hub が対象。clone 方式は、その repository で `git pull` する。
-どちらの方式でも、既存の `AGENTS.md`・`CLAUDE.md`・member 用の規則は上書きしない。
-新しいテンプレートの規則が必要なときは、agent が利用者の規則と照合して反映する。
-
-`relink` は member の skill を集め、同名なら version が新しいものを選ぶ。
-hub 自身の skill（`skills/` の `hub-slides`）も同じ場所に張る。
-member と `papers/*` の実体 directory、hub のコードの場所は `.claude/settings.json` の
-`permissions.additionalDirectories` に加える。他の設定と手で足した directory は残し、
-外れた member の分だけ消す。管理する一覧は `.hub/permission_dirs.json` に保存する。
-
-### ジョブログの整理
-
-`./hub logs` は解析・図・論文の build や hub のレビューを走査し、番号付きの `.out`・`.err`・`.log` と、それ以外の `.log` を数える。通常は番号付きログが作業ファイルに混在する場所を表示する。`--all-dirs` ですでに整理済みの場所と番号なしログの場所も表示する。run の中は解析ディレクトリと `work/` 直下を数え、シミュレーション出力の下位ディレクトリには入らない。例えば次の順で確認して移せる。
-
-```bash
-./hub logs
-./hub logs dust_charging/analysis/zenith-angle-dependence-20261104
-./hub logs dust_charging/analysis/zenith-angle-dependence-20261104 --apply
-```
-
-指定したディレクトリの直下で、Git 管理外かつ `sacct` で終了を確認できたファイルを、同じ名前で `logs/` へ移す。失敗したジョブも対象。同名の別ファイル、runops の実行ログ、既存の `logs/` は保持する。外部の文書から直リンクしているファイルは移動するとパスが変わる。
-
-新しいジョブでは投入前に出力先を作り、解析ならその解析の `logs/`、PDF なら論文の `build/logs/` に標準出力・エラーを指定する。hub を VS Code で開くと、ワークスペースの `files.exclude` が解析、図、run の作業場所などにあるジョブログをエクスプローラーから隠す。表示は `.vscode/settings.json` で切り替えられる。hub の初期化時には既存の VS Code 設定を優先する。
-
-### `./hub status` の 2 つの表示
-
-- **前回の確認以降に状態が変わった run。** 状態は実行のたびに `.hub/status_seen.json` に残る。
-  `--peek` は残さないので、agent が作業の途中で状態を見ても、人への報告の差分が消えない。
-- **完了後に記録が無い run。** 完了した日以降の `LOG.md` の項目、`notes/*.md`、解析 topic の
-  `.md`・`.csv`・`.json`、`runo note` のどこにも run id が出てこない run を数える。
-  見出しに「進捗確認」を含む LOG の項目は記録に数えない。run id が file に載っているかだけを見る
-  粗い目安で、結論が書かれたことまでは確かめない。
-
-## 開発
-
-従来の repository への symlink 方式も使える。こちらはコードの編集をすぐ hub へ反映するための手順。
-
-```bash
-git clone https://github.com/Nkzono99/runops-hub.git
-cd runops-hub
-./hub init ~/work/dev-hub
-```
-
-board の表示名は、各 `analysis/README.md` の `<!-- board -->` の直後、最初の `###` より前に
-`- 表示名: 地形上の導体` のように置けます。省略時は directory 名を使います。
-問い → 結論 → 図の読み方 → 図 → 解釈・限界 → 出典の順に表示し、図はクリックで原寸表示できます。
-目次・図の拡大・配色は単体HTMLの中で動き、外部のフォントやライブラリには依存しません。
-
-```bash
-python3 -m unittest discover -s tests -t tests
-uv build
-python3 tests/check_distribution.py dist
-```
-
-単体テストは標準ライブラリだけで動く（Python 3.11 以上）。HPC では環境の規則に従って計算ノードで実行する。
-最後の検査は wheel と sdist をそれぞれ uvx で実行し、キャッシュ削除後の `./hub`、project の
-attach・detach、編集した規則を保持する再初期化を確かめる。uv とネットワーク接続を使う。
-`src/runops_hub/` は初期化の入口で、既存の `hub`・`lib/`・`templates/` を配布する。
-`lib/*.py` は `RUNOPS_HUB_DIR`（`./hub` が設定する）を hub directory として扱う。
-
-## License
-
-Apache License 2.0. [LICENSE](LICENSE) を参照。
+[コマンド・運用リファレンス](docs/reference.md) ·
+[進捗スライド skill](skills/hub-slides/SKILL.md) ·
+[開発・テスト](docs/development.md) ·
+[Apache-2.0](LICENSE)

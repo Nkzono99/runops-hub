@@ -1,0 +1,71 @@
+# コマンドと運用のリファレンス
+
+普段の依頼ではエージェントが `./hub` を実行するため、人がコマンドを覚える必要はありません。
+run の作成・投入・中止など状態を変える `runo` コマンドは、対象 project に `cd` して実行します。
+
+## `./hub` コマンド一覧
+
+| command | 用途 |
+|---|---|
+| `./hub attach NAME PATH SIM... --desc TEXT` | 既存の runops project を `projects/` に加える |
+| `./hub new NAME SIM... --desc TEXT` | `../project_NAME` に新しい project を作って加える |
+| `./hub detach NAME` | hub から外す（symlink と表の行だけを消す。実体は残る） |
+| `./hub sync` / `list [--json]` / `context` / `doctor` / `update` | 全 project で同じ `runo` を実行する（`sync` のたびに `board.html` も再生成） |
+| `./hub status [--peek]` | 全 project の件数と active run、前回の確認以降に状態が変わった run、完了後に記録が無い run |
+| `./hub board` | `board.html` を hub directory に生成する（試作） |
+| `./hub slides [status\|new\|add\|build\|archive]` | 進捗スライドを `slides/` で管理し、Typst で PDF と 1 枚ごとの PNG にする |
+| `./hub logs [DIR [--apply]]` | hub・各 project・論文のジョブログを場所別に数え、`--apply` で `logs/` に集める |
+| `./hub relink [--check] [-v]` | skill の link と、project・論文の実体 directory に対する Claude Code 設定を揃える |
+| `./hub sessions` | この node で各 project に開いている tmux・claude・codex |
+| `./hub term NAME` | project の tmux session に入る |
+
+## `./hub status` の 2 つの表示
+
+- **前回の確認以降に状態が変わった run**: 状態は実行のたびに `.hub/status_seen.json` に残ります。`--peek` は残さないため、エージェントが作業の途中で状態を見ても、人への報告の差分が消えません。
+- **完了後に記録が無い run**: 完了した日以降の `LOG.md` の項目、`notes/*.md`、解析 topic の `.md`・`.csv`・`.json`、`runo note` のどこにも run id が出てこない run を数えます。見出しに「進捗確認」を含む LOG の項目は記録に数えません。run id がファイルに載っているかだけを見る粗い目安で、結論が書かれたことまでは確かめません。
+
+## `board.html`
+
+各 project の `analysis/README.md` にある `<!-- board -->` ブロックの表から、各 project の「分かっていること」（結論、図、図の読み方）と「まだ分かっていないこと」をまとめた単体 HTML を生成します（`./hub sync` のたびにも再生成されます）。
+
+- 表の書式は [lib/board.py](../lib/board.py) の冒頭を参照してください。
+- 表示名は `<!-- board -->` の直後、最初の `###` より前に `- 表示名: 地形上の導体` のように置けます（省略時は directory 名）。
+- 各テーマには `- 論文: papers/<name>` で関連論文を紐付けられます。
+- 問い → 結論 → 図の読み方 → 図 → 解釈・限界 → 出典の順に表示し、図はクリックで原寸表示できます。目次・図の拡大・配色は単体 HTML 内で完結し、外部のフォントやライブラリには依存しません。
+
+## 進捗スライド（`./hub slides`）
+
+結果 1 つを card（`card.toml` と図または CSV 表）にして project ごとの節に足し、Typst で PDF と 1 枚ごとの PNG にします。発表後は archive し、次の deck は前回からの差分だけで作ります。画像生成 AI による図には `ai_image` で印を付けられます。
+
+- 書式: [lib/slides.py](../lib/slides.py) の冒頭
+- 作り方: [skills/hub-slides/SKILL.md](../skills/hub-slides/SKILL.md)
+
+## `./hub relink` と旧形式の互換
+
+- `relink` は member の skill を集め、同名なら version が新しいものを選びます。hub 自身の skill（`skills/` の `hub-slides`）も同じ場所に張ります。
+- member と `papers/*` の実体 directory、hub のコードの場所は `.claude/settings.json` の `permissions.additionalDirectories` に加えます。他の設定と手で足した directory は残し、外れた member の分だけ消します。管理する一覧は `.hub/permission_dirs.json` に保存します。
+- 旧形式の hub 直下にある project も検出します。同名のリンクが両方にある場合は `projects/` 側を使います。
+
+## ジョブログの整理（`./hub logs`）
+
+`./hub logs` は解析・図・論文の build や hub のレビューを走査し、番号付きの `.out`・`.err`・`.log` と、それ以外の `.log` を数えます。通常は番号付きログが作業ファイルに混在する場所を表示し、`--all-dirs` ですでに整理済みの場所と番号なしログの場所も表示します。run の中は解析ディレクトリと `work/` 直下を数え、シミュレーション出力の下位ディレクトリには入りません。
+
+```bash
+./hub logs
+./hub logs projects/dust_charging/analysis/zenith-angle-dependence-20261104
+./hub logs projects/dust_charging/analysis/zenith-angle-dependence-20261104 --apply
+```
+
+指定したディレクトリの直下で、Git 管理外かつ `sacct` で終了を確認できたファイルを、同じ名前で `logs/` へ移します（失敗したジョブも対象）。同名の別ファイル、runops の実行ログ、既存の `logs/` は保持します。外部の文書から直リンクしているファイルは移動するとパスが変わります。
+
+新しいジョブでは投入前に出力先を作り、解析ならその解析の `logs/`、PDF なら論文の `build/logs/` に標準出力・エラーを指定します。hub を VS Code で開くと、ワークスペースの `files.exclude` が解析・図・run の作業場所などにあるジョブログをエクスプローラーから隠します（表示は `.vscode/settings.json` で切り替え可能。初期化時は既存の VS Code 設定を優先します）。
+
+## hub 本体の更新
+
+`./hub update` は各 project の runops の更新です。hub 本体の更新は次を使います。
+
+```bash
+uvx --refresh --from git+https://github.com/Nkzono99/runops-hub runops-hub init /path/to/hub
+```
+
+この再初期化は `uvx` 方式で作った hub が対象です。clone 方式は、その repository で `git pull` します。どちらの方式でも、既存の `AGENTS.md`・`CLAUDE.md`・member 用の規則・追加済み project・論文・記録は上書きしません。新しいテンプレートの規則が必要なときは、エージェントが利用者の規則と照合して反映します。
