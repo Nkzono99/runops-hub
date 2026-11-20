@@ -1,7 +1,7 @@
 # runops hub
 
 複数の runops project を 1 か所から見て、作業を振り分けるための入口。ここ自体は runops project
-ではなく、各 project は symlink で並んでいる。project はそれぞれ自己完結しており、直接開いて作業することもできる。
+ではなく、各 project は `projects/<名前>/` に symlink で並んでいる。project はそれぞれ自己完結しており、直接開いて作業することもできる。
 
 | dir | simulator | 内容 |
 |---|---|---|

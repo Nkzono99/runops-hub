@@ -12,17 +12,15 @@ import socket
 import subprocess
 from pathlib import Path
 
+from projects import member_paths
+
 # The hub directory (members, AGENTS.md, .hub/ state). ./hub exports it; run by hand, it is the cwd.
 HUB = Path(os.environ.get("RUNOPS_HUB_DIR") or Path.cwd()).resolve()
 AGENTS = {"claude", "codex"}
 
 
 def members() -> dict[str, Path]:
-    out = {}
-    for p in sorted(HUB.iterdir()):
-        if not p.name.startswith(".") and p.is_dir() and (p / "runops.toml").is_file():
-            out[p.name] = p.resolve()
-    return out
+    return {p.name: p.resolve() for p in member_paths(HUB)}
 
 
 def owner(path: str, mems: dict[str, Path]) -> str | None:

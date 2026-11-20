@@ -15,6 +15,17 @@ AGENTS = Path(os.environ.get("RUNOPS_HUB_DIR") or Path.cwd()).resolve() / "AGENT
 HEADER = "| dir | simulator | 内容 |"
 
 
+def member_paths(hub: Path) -> list[Path]:
+    """Discover new and legacy hubs; prefer the nested entry during migration."""
+    members = {}
+    for parent in (hub, hub / "projects"):
+        if parent.is_dir():
+            for path in parent.iterdir():
+                if not path.name.startswith(".") and (path / "runops.toml").is_file():
+                    members[path.name] = path
+    return [members[name] for name in sorted(members)]
+
+
 def rows(lines: list[str]) -> tuple[int, int]:
     """Index of the header line and one past the last table row."""
     start = lines.index(HEADER)
@@ -25,6 +36,10 @@ def rows(lines: list[str]) -> tuple[int, int]:
 
 
 def main(argv: list[str]) -> int:
+    if argv == ["list"]:
+        for member in member_paths(AGENTS.parent):
+            print(member)
+        return 0
     lines = AGENTS.read_text(encoding="utf-8").splitlines()
     try:
         start, end = rows(lines)
@@ -33,15 +48,15 @@ def main(argv: list[str]) -> int:
         return 1
     if len(argv) == 4 and argv[0] == "add":
         name, sim, desc = argv[1:]
-        if any(line.startswith(f"| `{name}/` ") for line in lines[start:end]):
+        if any(line.startswith((f"| `projects/{name}/` ", f"| `{name}/` ")) for line in lines[start:end]):
             return 0
-        lines.insert(end, f"| `{name}/` | {sim} | {desc} |")
+        lines.insert(end, f"| `projects/{name}/` | {sim} | {desc} |")
     elif len(argv) == 2 and argv[0] == "remove":
         name = argv[1]
         lines = [
             line
             for i, line in enumerate(lines)
-            if not (start < i < end and line.startswith(f"| `{name}/` "))
+            if not (start < i < end and line.startswith((f"| `projects/{name}/` ", f"| `{name}/` ")))
         ]
     else:
         print(__doc__)

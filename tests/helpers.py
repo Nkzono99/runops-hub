@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 from pathlib import Path
 from types import ModuleType
 
 REPO = Path(__file__).resolve().parent.parent
+
+
+sys.path.insert(0, str(REPO / "lib"))
 
 
 def load(name: str, hub: Path) -> ModuleType:
@@ -23,5 +27,6 @@ def member(hub: Path, name: str) -> Path:
     project = hub.parent / f"project_{name}"
     project.mkdir()
     (project / "runops.toml").write_text("[project]\n", encoding="utf-8")
-    (hub / name).symlink_to(f"../project_{name}")
+    (hub / "projects").mkdir(exist_ok=True)
+    (hub / "projects" / name).symlink_to(f"../../project_{name}")
     return project

@@ -105,10 +105,10 @@ class BoardTest(unittest.TestCase):
         topic = self.project / "analysis" / "scan"
         topic.mkdir(parents=True)
         (topic / "report.html").write_text("<p>", encoding="utf-8")
-        out = self.board.inline("[結果](scan/README.md) と [ノート](../notes/a.md) <b>", "demo/analysis", self.hub)
-        self.assertIn('href="demo/analysis/scan/README.md"', out)
-        self.assertIn('href="demo/analysis/scan/report.html"', out)
-        self.assertIn('href="demo/notes/a.md"', out)
+        out = self.board.inline("[結果](scan/README.md) と [ノート](../notes/a.md) <b>", "projects/demo/analysis", self.hub)
+        self.assertIn('href="projects/demo/analysis/scan/README.md"', out)
+        self.assertIn('href="projects/demo/analysis/scan/report.html"', out)
+        self.assertIn('href="projects/demo/notes/a.md"', out)
         self.assertIn("&lt;b&gt;", out)
 
     def test_a_figure_cell_gives_how_to_read_it_and_the_path(self) -> None:
@@ -128,7 +128,7 @@ class BoardTest(unittest.TestCase):
             run("R20261105-0002", "runs/scan/coupled", "completed", "2026-11-06T13:00:00+09:00"),
             run("R20261105-0007", "runs/scan/open", "running"),
         ]
-        page, stale = self.board.render_line(line, runs, "demo/analysis", self.hub)
+        page, stale = self.board.render_line(line, runs, "projects/demo/analysis", self.hub)
         self.assertEqual(stale, 1)
         self.assertIn('<p class="lead">効かない。</p>', page)
         self.assertIn('src="data:image/png;base64,', page)
@@ -140,7 +140,7 @@ class BoardTest(unittest.TestCase):
     def test_an_open_question_whose_runs_finished_waits_for_analysis(self) -> None:
         line = self.board.parse_board(TABLE)[0]
         runs = [run("R20261105-0007", "runs/scan/open", "completed", "2026-11-06T13:00:00+09:00")]
-        page, _ = self.board.render_line(line, runs, "demo/analysis", self.hub)
+        page, _ = self.board.render_line(line, runs, "projects/demo/analysis", self.hub)
         self.assertIn('接合なしでも同じか<span class="tag">計算は完了、解析待ち</span>', page)
 
 

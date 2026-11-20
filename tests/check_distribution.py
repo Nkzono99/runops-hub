@@ -45,9 +45,9 @@ def check(artifact: Path, uv: str, base: Path) -> dict:
     (workspace / "AGENTS.md").write_text(custom)
     run(*init)
     assert (workspace / "AGENTS.md").read_text() == custom
-    assert (workspace / "example").resolve() == project
+    assert (workspace / "projects/example").resolve() == project
     run("bash", str(workspace / "hub"), "detach", "example")
-    assert project.is_dir() and not (workspace / "example").is_symlink()
+    assert project.is_dir() and not (workspace / "projects/example").is_symlink()
     return {"artifact": artifact.name, "cache_removal": "passed", "attach_detach": "passed", "refresh": "passed"}
 
 

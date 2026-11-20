@@ -41,7 +41,7 @@ class LogTest(unittest.TestCase):
         git = ["git", "-C", str(self.project)]
         subprocess.run(git + ["init", "-q"], check=True)
         subprocess.run(git + ["add", "--", "analysis/with spaces/tracked-101.out"], check=True)
-        target = "column/analysis/with spaces"
+        target = "projects/column/analysis/with spaces"
         preview = self.logs(target)
         self.assertEqual(preview.returncode, 0, preview.stderr)
         self.assertIn("would move 4", preview.stdout)
@@ -74,12 +74,12 @@ class LogTest(unittest.TestCase):
         (self.hub / "papers/example").symlink_to(paper)
         result = self.logs("--all-dirs")
         self.assertEqual(result.returncode, 0, result.stderr)
-        for name in ("papers/example/figures", "column/analysis/with spaces", "column/runs/example/R1/analysis"):
+        for name in ("papers/example/figures", "projects/column/analysis/with spaces", "projects/column/runs/example/R1/analysis"):
             self.assertEqual(result.stdout.count(name), 1)
-        self.assertIn("column/runs/example/R1/work", result.stdout)
+        self.assertIn("projects/column/runs/example/R1/work", result.stdout)
         self.assertIn("1 in run work/", result.stdout)
         self.assertNotIn("R1/work", self.logs().stdout)
-        self.assertNotEqual(self.logs("column/runs/example/R1/work", "--apply").returncode, 0)
+        self.assertNotEqual(self.logs("projects/column/runs/example/R1/work", "--apply").returncode, 0)
         self.assertNotEqual(self.logs("--apply").returncode, 0)
         self.assertNotEqual(self.logs("..", "--apply").returncode, 0)
         self.assertTrue((run / "work/stdout.101.log").exists())

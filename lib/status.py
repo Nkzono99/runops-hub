@@ -22,6 +22,8 @@ from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
 
+from projects import member_paths
+
 # The hub directory (members, AGENTS.md, .hub/ state). ./hub exports it; run by hand, it is the cwd.
 HUB = Path(os.environ.get("RUNOPS_HUB_DIR") or Path.cwd()).resolve()
 STATES = ["--status", "submitted", "--status", "running"]
@@ -38,10 +40,7 @@ LOG_ENTRY_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2})(.*)$", re.MULTILINE)
 
 
 def members() -> list[Path]:
-    return sorted(
-        p for p in HUB.iterdir()
-        if not p.name.startswith(".") and p.is_dir() and (p / "runops.toml").is_file()
-    )
+    return member_paths(HUB)
 
 
 def runo_json(member: Path, args: list[str]) -> tuple[int, object]:

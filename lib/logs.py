@@ -3,6 +3,8 @@ import argparse
 import fcntl
 import os
 from pathlib import Path
+
+from projects import member_paths
 import re
 import subprocess
 import sys
@@ -32,7 +34,7 @@ def finished_jobs(job_ids):
 
 
 def project_roots(hub):
-    roots = [p for p in hub.iterdir() if (p / "runops.toml").is_file()]
+    roots = member_paths(hub)
     papers = hub / "papers"
     if papers.is_dir():
         roots.extend(p for p in papers.iterdir() if (p / "paper.toml").is_file())

@@ -2,7 +2,7 @@
 
 複数の [runops](https://github.com/Nkzono99/runops) project を、1 つの directory で agent と一緒に扱うための入口。
 人が hub を初期化し、その後の project の追加・作成・進捗確認・解析は agent に自然文で頼む。
-各 project は symlink で並び、それぞれ単独でも使える。
+各 project は `projects/<名前>/` に symlink で並び、それぞれ単独でも使える。
 
 ## はじめる
 
@@ -39,6 +39,7 @@ hub/
 ├── AGENTS.md           # agent の入口。project の一覧と作業の規則
 ├── CLAUDE.md           # Claude Code からも同じ規則を読む
 ├── hub                 # 以後、agent が使う ./hub
+├── projects/           # 各 project への symlink（例: projects/crater/）
 └── .hub/
     ├── runtime/        # hub のコードとテンプレート
     ├── python          # hub 用 Python の実体 path
@@ -71,6 +72,8 @@ hub 本体の更新も「hub を最新版にして」と agent に頼めばよ�
 | `./hub relink [--check] [-v]` | skill の link と、project・論文の実体 directory に対する Claude Code の設定を揃える |
 | `./hub detach NAME` | hub から外す（symlink と表の行だけを消す） |
 | `./hub term NAME` | project の tmux session に入る |
+
+旧形式の hub 直下にある project も検出する。同名のリンクが両方にある場合は `projects/` 側を使う。
 
 run を変える `runo`（`new`、`submit`、`cancel` など）は対象の project に `cd` して実行する。
 `./hub update` は各 project の runops の更新であり、hub 本体の更新は次を使う。

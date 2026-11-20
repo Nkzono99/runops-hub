@@ -174,7 +174,7 @@ def descriptions(hub: Path) -> dict[str, str]:
     for line in text.splitlines():
         cell = table_cells(line) if line.startswith("| `") else []
         if len(cell) == 3 and cell[0].endswith("/`") and "papers/" not in cell[0]:
-            found[cell[0].strip("`/")] = cell[2]
+            found[cell[0].strip("`/").removeprefix("projects/")] = cell[2]
     return found
 
 
@@ -398,7 +398,7 @@ def build(hub: Path, now: datetime) -> tuple[str, int]:
         runs = load_runs(member)
         body = ""
         for line in lines:
-            block, old = render_line(line, runs, f"{name}/analysis", hub)
+            block, old = render_line(line, runs, str(member.relative_to(hub) / "analysis"), hub)
             body += block
             stale += old
         title = project_title(text, name)

@@ -25,6 +25,8 @@ import os
 import sys
 from pathlib import Path
 
+from projects import member_paths
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
@@ -45,13 +47,7 @@ def version_key(v: str) -> tuple:
 
 
 def members() -> list[Path]:
-    out = []
-    for p in sorted(HUB.iterdir()):
-        if p.name.startswith(".") or not p.is_dir():
-            continue
-        if (p / "runops.toml").is_file():
-            out.append(p)
-    return out
+    return member_paths(HUB)
 
 
 def load_lock(member: Path) -> list[dict]:
@@ -68,7 +64,7 @@ def choose(mems: list[Path]) -> tuple[dict[str, dict], list[str]]:
     seen: dict[str, list[dict]] = {}
     for m in mems:
         for s in load_lock(m):
-            seen.setdefault(s["name"], []).append({**s, "member": m.name})
+            seen.setdefault(s["name"], []).append({**s, "member": m.name, "path": m})
     chosen: dict[str, dict] = {}
     notes: list[str] = []
     for name, entries in sorted(seen.items()):
@@ -94,11 +90,11 @@ def plan(chosen: dict[str, dict]) -> tuple[list[tuple], list[str]]:
         skills_dir.mkdir(parents=True, exist_ok=True)
         wanted: dict[str, str] = {}
         for name, e in chosen.items():
-            src = HUB / e["member"] / kind / "skills" / name
+            src = e["path"] / kind / "skills" / name
             if not src.is_dir():
                 warnings.append(f"{e['member']}/{kind}/skills/{name} missing; not linked")
                 continue
-            wanted[name] = os.path.join("..", "..", e["member"], kind, "skills", name)
+            wanted[name] = os.path.relpath(src, skills_dir)
         for name, target in wanted.items():
             link = skills_dir / name
             if link.is_symlink():
@@ -185,9 +181,6 @@ def apply_dirs(new_settings: dict | None, wanted: list[str]) -> None:
 def main(argv: list[str]) -> int:
     check = "--check" in argv
     mems = members()
-    if not mems:
-        print("no member projects (symlinks with runops.toml) in", HUB)
-        return 2
     chosen, notes = choose(mems)
     changes, warnings = plan(chosen)
     wanted = work_dirs(mems)

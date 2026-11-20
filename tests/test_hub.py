@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from helpers import REPO, load, member
 
@@ -39,14 +41,46 @@ class HubTest(unittest.TestCase):
         (project / "AGENTS.md").write_text("# old\n", encoding="utf-8")
         res = self.run_hub(self.hub / "hub", "attach", "old", str(project), "emses", "--desc", "goal")
         self.assertEqual(res.returncode, 0, res.stderr + res.stdout)
-        self.assertEqual(os.readlink(self.hub / "old"), "../old_project")
-        self.assertIn("| `old/` | emses | goal |", (self.hub / "AGENTS.md").read_text(encoding="utf-8"))
+        self.assertEqual(os.readlink(self.hub / "projects/old"), "../../old_project")
+        self.assertIn("| `projects/old/` | emses | goal |", (self.hub / "AGENTS.md").read_text(encoding="utf-8"))
         self.assertIn("## runops hub", (project / "AGENTS.md").read_text(encoding="utf-8"))
         res = self.run_hub(self.hub / "hub", "detach", "old")
         self.assertEqual(res.returncode, 0, res.stderr + res.stdout)
-        self.assertFalse((self.hub / "old").is_symlink())
-        self.assertNotIn("`old/`", (self.hub / "AGENTS.md").read_text(encoding="utf-8"))
+        self.assertFalse((self.hub / "projects/old").is_symlink())
+        self.assertNotIn("`projects/old/`", (self.hub / "AGENTS.md").read_text(encoding="utf-8"))
         self.assertTrue(project.is_dir())
+
+    def test_members_in_mixed_layout_are_listed_once(self) -> None:
+        project = member(self.hub, "nested")
+        (self.hub / "nested").symlink_to(project)
+        legacy = self.hub.parent / "legacy"
+        legacy.mkdir()
+        (legacy / "runops.toml").touch()
+        (self.hub / "old").symlink_to(legacy)
+        projects = load("projects", self.hub)
+        self.assertEqual(projects.member_paths(self.hub),
+                         [self.hub / "projects/nested", self.hub / "old"])
+        result = self.run_hub(self.hub / "hub", "detach", "../legacy")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(legacy.is_dir())
+
+        result = self.run_hub(self.hub / "hub", "detach", "projects/nested/")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(projects.member_paths(self.hub), [self.hub / "old"])
+        self.assertTrue(project.is_dir())
+
+    def test_new_generic_project_lives_beside_hub_and_is_linked_under_projects(self) -> None:
+        commands = self.hub.parent / "bin"
+        commands.mkdir()
+        (commands / "python").symlink_to(sys.executable)
+        runo = commands / "runo"
+        runo.write_text("#!/bin/sh\n[ \"$1\" = init ] && touch runops.toml AGENTS.md\n")
+        runo.chmod(0o755)
+        with patch.dict(os.environ, PATH=str(commands) + os.pathsep + os.environ["PATH"]):
+            res = self.run_hub(self.hub / "hub", "new", "demo", "generic", "--desc", "goal")
+        self.assertEqual(res.returncode, 0, res.stderr + res.stdout)
+        self.assertEqual((self.hub / "projects/demo").resolve(), self.hub.parent / "project_demo")
+        self.assertFalse((self.hub / "demo").exists())
 
     def test_relink_exposes_the_newest_copy_of_each_skill(self) -> None:
         for name, version in (("a", "2.7.0"), ("b", "2.8.0")):
@@ -62,7 +96,7 @@ class HubTest(unittest.TestCase):
         self.assertEqual(chosen["runops-x"]["member"], "b")
         self.assertEqual(len(notes), 1)
         relink.apply(relink.plan(chosen)[0])
-        self.assertEqual(os.readlink(self.hub / ".claude" / "skills" / "runops-x"), "../../b/.claude/skills/runops-x")
+        self.assertEqual(os.readlink(self.hub / ".claude" / "skills" / "runops-x"), "../../projects/b/.claude/skills/runops-x")
 
     def test_relink_keeps_the_real_paths_of_members_and_papers_as_working_directories(self) -> None:
         project = member(self.hub, "a")
@@ -82,7 +116,7 @@ class HubTest(unittest.TestCase):
         self.assertEqual(data["permissions"]["additionalDirectories"],
                          ["/by/hand", str(project.resolve()), str(paper.resolve()), str(REPO)])
         self.assertEqual(relink.main(["--check"]), 0)  # nothing left to change
-        (self.hub / "a").unlink()
+        (self.hub / "projects/a").unlink()
         member(self.hub, "b")
         self.assertEqual(relink.main(["--check"]), 1)
         self.assertEqual(relink.main([]), 0)
