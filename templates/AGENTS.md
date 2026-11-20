@@ -46,6 +46,7 @@ project の追加・作成、runops の準備、以後の操作は agent が行�
 | `./hub doctor` / `update` | 環境と skill の検査 / 更新（`update` の後は skill link も張り直す） |
 | `./hub sessions` | この login node で各 project に開いている tmux・claude・codex |
 | `./hub logs [DIR [--apply]]` | 各 project・論文・hub のジョブログを場所別に一覧する。`DIR` 指定で直下を確認し、`--apply` で終了したジョブのログを `DIR/logs/` にまとめる。解析・図・PDF の新しいジョブは投入前に作業場所の `logs/`（PDF は `build/logs/`）を作ってそこに出す。 |
+| `./hub slides [status\|new\|add\|build\|archive]` | 進捗スライド（`slides/`）。結果 1 つを card 1 つとして project ごとの節に足し、発表ごとの deck を PDF にする。発表後に archive し、次は差分だけで作る。作り方は skill `hub-slides` に従う |
 | `./hub relink [--check] [-v]` | hub の skill link を member から作り直し、member と論文の実体 directory を Claude Code の作業 directory（`.claude/settings.json`）に揃える。`new`・`attach`・`detach`・`update` も最後に実行する |
 | `./hub new NAME SIM... --desc TEXT` | 新しい project（`../project_NAME`）を作って hub に加える |
 | `./hub attach NAME PATH SIM... --desc TEXT` | 既にある runops project を hub に加える |

@@ -69,6 +69,7 @@ hub 本体の更新も「hub を最新版にして」と agent に頼めばよ�
 | `./hub board` | 人が見る `board.html` を hub directory に作る（試作）。各 project の「分かっていること」（結論、図、図の読み方）と「まだ分かっていないこと」。`./hub sync` のたびにも作り直す。元になる表の書式は `lib/board.py` の冒頭 |
 | `./hub sessions` | この node で各 project に開いている tmux・claude・codex |
 | `./hub logs [DIR [--apply]]` | hub・各 project・論文のジョブ番号付きログを場所別に数える。`DIR` を指定するとその直下の整理候補を表示し、`--apply` で同じ場所の `logs/` に集める。 |
+| `./hub slides [status\|new\|add\|build\|archive]` | 進捗スライドを `slides/` に作る。結果 1 つを card（`card.toml` と図）にして project ごとの節に足し、Typst で PDF と 1 枚ごとの PNG にする。書式は `lib/slides.py` の冒頭、作り方は `skills/hub-slides/SKILL.md` |
 | `./hub relink [--check] [-v]` | skill の link と、project・論文の実体 directory に対する Claude Code の設定を揃える |
 | `./hub detach NAME` | hub から外す（symlink と表の行だけを消す） |
 | `./hub term NAME` | project の tmux session に入る |
@@ -87,6 +88,7 @@ uvx --refresh --from git+https://github.com/Nkzono99/runops-hub runops-hub init 
 新しいテンプレートの規則が必要なときは、agent が利用者の規則と照合して反映する。
 
 `relink` は member の skill を集め、同名なら version が新しいものを選ぶ。
+hub 自身の skill（`skills/` の `hub-slides`）も同じ場所に張る。
 member と `papers/*` の実体 directory、hub のコードの場所は `.claude/settings.json` の
 `permissions.additionalDirectories` に加える。他の設定と手で足した directory は残し、
 外れた member の分だけ消す。管理する一覧は `.hub/permission_dirs.json` に保存する。

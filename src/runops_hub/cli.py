@@ -38,7 +38,9 @@ def initialize(directory: Path) -> None:
         shutil.copy2(source / "hub", replacement / "hub")
         (replacement / "hub").chmod(0o755)
         shutil.copy2(source / "LICENSE", replacement / "LICENSE")
-        for name in ("lib", "templates"):
+        for name in ("lib", "templates", "skills"):
+            if name == "skills" and not (source / name).is_dir():
+                continue   # a source tree from before the hub shipped skills of its own
             shutil.copytree(source / name, replacement / name,
                             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         previous = staging / "previous"

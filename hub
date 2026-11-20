@@ -15,12 +15,14 @@
 #   ./hub term NAME          open (or re-attach) the tmux session for one project
 #   ./hub sessions           show direct tmux/claude/codex sessions per project (this node)
 #   ./hub logs [DIR [--apply]]  list job log locations or collect loose logs in DIR/logs/
+#   ./hub slides [status|new|add|build|archive] ...  progress slides under slides/: one card per
+#       result, one deck per presentation (lib/slides.py)
 # Run-changing runo commands (runo new, submit, cancel, tidy --apply, ...) are not run here:
 # cd into one project and run them there.
 set -u
 code=$(dirname "$(readlink -f "$0")")
 cmd=${1:-}
-usage='usage: ./hub {list|context|sync|doctor|update|status|board|relink|new|attach|detach|term|sessions|logs} [args]
+usage='usage: ./hub {list|context|sync|doctor|update|status|board|relink|new|attach|detach|term|sessions|logs|slides} [args]
        <repo>/hub init DIR'
 
 # lib/*.py need Python >= 3.11. Prefer the interpreter recorded by uvx init, then
@@ -95,6 +97,7 @@ case "$cmd" in
   status) shift; "$PY" "$code/lib/status.py" "$@"; exit $? ;;
   board) shift; "$PY" "$code/lib/board.py" "$@"; exit $? ;;
   logs) shift; "$PY" "$code/lib/logs.py" "$@"; exit $? ;;
+  slides) shift; "$PY" "$code/lib/slides.py" "$@"; exit $? ;;
   term|detach)
     name=${2:-}
     name=${name%/}

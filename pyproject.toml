@@ -33,10 +33,12 @@ packages = ["src/runops_hub"]
 "lib/relink.py" = "runops_hub/_runtime/lib/relink.py"
 "lib/sessions.py" = "runops_hub/_runtime/lib/sessions.py"
 "lib/status.py" = "runops_hub/_runtime/lib/status.py"
+"lib/slides.py" = "runops_hub/_runtime/lib/slides.py"
+"skills" = "runops_hub/_runtime/skills"
 "templates/AGENTS.md" = "runops_hub/_runtime/templates/AGENTS.md"
 "templates/vscode-settings.json" = "runops_hub/_runtime/templates/vscode-settings.json"
 "templates/member_section.md" = "runops_hub/_runtime/templates/member_section.md"
 "LICENSE" = "runops_hub/_runtime/LICENSE"
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/hub", "/lib/*.py", "/templates", "/tests", "/README.md", "/LICENSE", "/pyproject.toml"]
+include = ["/src", "/hub", "/lib/*.py", "/skills", "/templates", "/tests", "/README.md", "/LICENSE", "/pyproject.toml"]

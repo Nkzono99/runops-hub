@@ -4,7 +4,8 @@
 Skills: the hub exposes the union of every member's deployed skills. When several
 members deploy the same skill, the member whose `.runops/skills.lock` records the
 newest version wins (ties: first member name in sorted order; contents are then
-identical). Only symlinks under .claude/skills and .agents/skills are managed;
+identical). The skills that ship with the hub itself (`skills/` beside this
+directory, e.g. hub-slides) are linked the same way; a member skill of the same name wins. Only symlinks under .claude/skills and .agents/skills are managed;
 a real directory there is left alone and reported.
 
 Working directories: members and papers/* are symlinks to directories outside the hub,
@@ -81,6 +82,12 @@ def choose(mems: list[Path]) -> tuple[dict[str, dict], list[str]]:
     return chosen, notes
 
 
+def own_skills() -> list[Path]:
+    """Skills of the hub itself: every directory with a SKILL.md under the code's skills/."""
+    root = REPO / "skills"
+    return sorted(p for p in root.iterdir() if (p / "SKILL.md").is_file()) if root.is_dir() else []
+
+
 def plan(chosen: dict[str, dict]) -> tuple[list[tuple], list[str]]:
     """Return (changes, warnings). A change is (action, link_path, target_or_None)."""
     changes: list[tuple] = []
@@ -95,6 +102,8 @@ def plan(chosen: dict[str, dict]) -> tuple[list[tuple], list[str]]:
                 warnings.append(f"{e['member']}/{kind}/skills/{name} missing; not linked")
                 continue
             wanted[name] = os.path.relpath(src, skills_dir)
+        for src in own_skills():
+            wanted.setdefault(src.name, os.path.relpath(src, skills_dir))
         for name, target in wanted.items():
             link = skills_dir / name
             if link.is_symlink():
@@ -202,6 +211,9 @@ def main(argv: list[str]) -> int:
         if verbose:
             for n in sorted(names):
                 print(f"      {n}")
+    own = [p.name for p in own_skills() if p.name not in chosen]
+    if own:
+        print(f"  hub <- {REPO / 'skills'} ({len(own)} skills: {', '.join(own)})")
     if notes:
         print("version skew between members:")
         for n in notes:
