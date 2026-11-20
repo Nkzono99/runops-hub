@@ -20,8 +20,9 @@ Layout, under ``<hub>/slides/``::
 A card says what a slide shows; this file decides where things go. The figure gets the whole
 area under the title, and the text goes under a wide figure or beside a tall one, whichever
 leaves the figure larger. Names of panels and curves, and the values a claim rests on, belong
-on the figure (``marks``, or a figure drawn for the slide), not in the text. The source of a
-card is recorded in card.toml and is not shown. Text heights are measured by Typst first
+on the figure (``marks``, or a figure drawn for the slide), not in the text. A slide can show
+a table instead of a figure (``table = "x.csv"``), set in the largest type that fits. The source
+of a card is recorded in card.toml and is not shown. Text heights are measured by Typst first
 (``typst query``), so the choice uses real line breaks.
 
 ``build`` exits 1 when a check fails (text that does not fit, a title that is empty or longer
@@ -32,6 +33,7 @@ carries several numbers. Only the standard library is used; Typst >= 0.12 does t
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -62,6 +64,8 @@ INSET_H, INSET_MAX_W = 72.0, 200.0
 TEXT_WARN = 80                 # characters of look + found + open on one slide
 NUMBER_WARN = 2                # numbers in that text; more than this belongs in the figure
 FIGURE_WARN = 0.60             # figure area with text, relative to the same figure alone on the slide
+TABLE_SIZES = (20, 18, 16, 14, 12)     # a table is set in the largest of these that fits
+NUMBER_CELL = re.compile(r"^[+\-−]?\d+(?:[.,]\d+)?\s*%?$")
 FONTS = ("Noto Sans CJK JP", "Noto Sans JP", "Hiragino Sans", "Yu Gothic")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 DECK_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
@@ -79,6 +83,7 @@ def preamble(font: str) -> str:
 #let key(s) = text(fill: accent, weight: "bold", s)
 #let title(body) = text(size: {TITLE_PT}pt, weight: "light", body)
 #let mq(id, w, body) = context [#metadata((id: id, w: w, h: measure(width: w * 1pt, body).height.pt())) <m>]
+#let mt(id, size, body) = context [#metadata((id: id, s: size, w: measure(body).width.pt(), h: measure(body).height.pt())) <t>]
 """
 
 
@@ -214,6 +219,16 @@ def load_pages(deck: Path, sections: list[dict], problems: list[str]) -> list[di
                             page["stale"] = sha256(orig) != sha256(path)
                     else:
                         problems.append(f"{page['id']}: 図が無い（{path}）")
+                if fig.get("table"):
+                    path = cdir / fig["table"]
+                    rows = []
+                    if path.is_file():
+                        with path.open(encoding="utf-8", newline="") as f:
+                            rows = [r for r in csv.reader(line for line in f if not line.startswith("#")) if r]
+                    if len(rows) < 2:
+                        problems.append(f"{page['id']}: 表が無いか、見出しだけ（{path}）")
+                    else:
+                        page["table"] = rows
                 if fig.get("inset"):
                     ipath = deck / fig["inset"] if (deck / fig["inset"]).is_file() else root / fig["inset"]
                     if ipath.is_file():
@@ -294,6 +309,42 @@ def choose_layout(page: dict, heights: dict[float, float]) -> dict:
     return max(cands, key=lambda c: c["fig"][2] * c["fig"][3])
 
 
+def table_typst(rows: list[list[str]], size: int) -> str:
+    """A ruled table: the first row is the header, columns of numbers are right-aligned, and a
+    thin rule separates groups when the first column repeats (``**cell**`` takes the accent)."""
+    head, body = rows[0], [r + [""] * (len(rows[0]) - len(r)) for r in rows[1:]]
+    n = len(head)
+    def numeric(c: int) -> bool:
+        cells = [r[c].replace("**", "").strip() for r in body if r[c].strip()]
+        return bool(cells) and all(NUMBER_CELL.match(x) for x in cells)
+    align = "".join(("right" if numeric(c) else "left") + ", " for c in range(n))
+    grouped = len({r[0] for r in body}) < len(body)
+    parts = ["table.hline(stroke: 1.2pt)",
+             "table.header(" + ", ".join(f'[#text(weight: "medium")[{rich(h.strip())}]]' for h in head) + ")",
+             "table.hline(stroke: 0.7pt)"]
+    for i, r in enumerate(body):
+        if grouped and i and r[0] != body[i - 1][0]:
+            parts.append("table.hline(stroke: 0.5pt + muted)")
+        parts += [f"[{rich(c.strip())}]" for c in r[:n]]
+    parts.append("table.hline(stroke: 1.2pt)")
+    return (f"#text(size: {size}pt)[#table(columns: {n}, stroke: none, inset: (x: 12pt, y: 7pt), align: ({align}),\n  "
+            + ",\n  ".join(parts) + ")]")
+
+
+def table_layout(text_h: float, sizes: dict[int, tuple[float, float]]) -> dict:
+    """A table alone on the slide, centred, with the text under it; the largest type that fits."""
+    aw, ah = PAGE_W - 2 * MX, BOTTOM - TOP
+    room = ah - (text_h + GAP if text_h else 0.0)
+    size = next((s for s in TABLE_SIZES if sizes[s][0] <= aw and sizes[s][1] <= room), None)
+    fits = size is not None
+    w, h = sizes[size or TABLE_SIZES[-1]]
+    y = TOP + max(0.0, (room - h) / 3)
+    lay = {"mode": "table", "table": (MX + max(0.0, (aw - w) / 2), y, size or TABLE_SIZES[-1]), "fits": fits}
+    if text_h:
+        lay["text"] = (MX, y + h + GAP, aw, text_h)
+    return lay
+
+
 def mark_typst(m: dict, fw: float, fh: float) -> str:
     kind = m.get("type")
     if kind == "label":   # ink on a white plate unless a colour is asked for (naming a curve by its colour)
@@ -331,6 +382,9 @@ def page_typst(page: dict, lay: dict, number: int, root: Path) -> str:
         except KeyError as exc:
             die(f"{page['id']}: a mark lacks {exc}")
         out.append(f"#at({x:.1f}, {y:.1f})[#box(width: {fw:.1f}pt, height: {fh:.1f}pt)[#place(top + left, image({lit(rel(page['figure'], root))}, width: {fw:.1f}pt, height: {fh:.1f}pt, fit: \"stretch\")){marks}]]")
+    if "table" in lay:
+        x, y, size = lay["table"]
+        out.append(f"#at({x:.1f}, {y:.1f})[{table_typst(page['table'], size)}]")
     if "text" in lay:
         x, y, tw, _ = lay["text"]
         out.append(f"#at({x:.1f}, {y:.1f})[#block(width: {tw:.1f}pt)[\n{text_block(page['text'])}]]")
@@ -406,22 +460,34 @@ def cmd_build(argv: list[str]) -> int:
         if block:
             for w in (aw,) + RIGHT_WIDTHS:
                 probe.append(f"#mq({lit(p['id'])}, {w}, [\n{block}])")
+        if p.get("table"):
+            for size in TABLE_SIZES:
+                probe.append(f"#mt({lit(p['id'])}, {size}, [{table_typst(p['table'], size)}])")
     (out / "measure.typ").write_text("\n".join(probe) + "\n", encoding="utf-8")
     measured = json.loads(run(typst + ["query"] + common + [str(out / "measure.typ"), "<m>", "--field", "value"]).stdout)
     heights: dict[str, dict[float, float]] = {}
     for m in measured:
         heights.setdefault(m["id"], {})[float(m["w"])] = m["h"]
     line = heights["ref"][aw]
+    tables: dict[str, dict[int, tuple[float, float]]] = {}
+    if any(p.get("table") for p in pages):
+        for m in json.loads(run(typst + ["query"] + common + [str(out / "measure.typ"), "<t>", "--field", "value"]).stdout):
+            tables.setdefault(m["id"], {})[int(m["s"])] = (m["w"], m["h"])
 
     # Pass 2: place everything.
     body, report = [head, front_typst(meta, sections, pages)], []
     for n, p in enumerate(pages, 3):
-        lay = choose_layout(p, heights.get(p["id"], {}))
+        if p.get("table"):
+            lay = table_layout(heights.get(p["id"], {}).get(aw, 0.0), tables[p["id"]])
+        else:
+            lay = choose_layout(p, heights.get(p["id"], {}))
         body.append(page_typst(p, lay, n, root))
         said = "".join(p["text"].get(k, "") for k in ("look", "found", "open"))
         chars = plain_len(said)
         notes = []
-        if not lay["fits"]:
+        if not lay["fits"] and p.get("table"):
+            problems.append(f"{p['id']}: 表が収まらない。行か列を減らすか、表を分ける")
+        elif not lay["fits"]:
             problems.append(f"{p['id']}: 文が収まらない（{chars}字）。文を削るか、card を分ける")
         if max(heights[p["id"] + "/title"].values()) > line * 1.3:
             problems.append(f"{p['id']}: タイトルが1行に収まらない（{plain_len(p['title'])}字）")

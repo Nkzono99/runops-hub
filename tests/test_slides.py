@@ -39,7 +39,10 @@ elif args[0] == "query":
     lines = Path(next(a for a in args if a.endswith(".typ"))).read_text(encoding="utf-8").splitlines()
     out = []
     for n, line in enumerate(lines):
-        if not line.startswith("#mq("):
+        if "<t>" in args and line.startswith("#mt("):
+            size = int(line.split('", ', 1)[1].split(",")[0])
+            out.append({"id": line.split('"')[1], "s": size, "w": 30.0 * size, "h": 12.0 * size})
+        if "<t>" in args or not line.startswith("#mq("):
             continue
         ident = line.split('"')[1]
         width = float(line.split('", ', 1)[1].split(",")[0])
@@ -182,6 +185,27 @@ class SlidesTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("タイトルが1行に収まらない", out)
         self.assertIn("文が収まらない", out)
+
+    def test_a_table_is_set_in_the_largest_type_that_fits(self) -> None:
+        s = self.slides
+        self.call(s.cmd_new, "20261127")
+        self.call(s.cmd_add, "20261127", "values", "--section", "alpha", "--title", "条件ごとの値")
+        card = self.card("20261127", "values")
+        (card.parent / "t.csv").write_text("# 写し\n条件,放出分布,表面電位 [V]\n通常,Maxwell,+5.783\n通常,月試料,**+0.350**\n希薄,Maxwell,−7.5\n", encoding="utf-8")
+        card.write_text(card.read_text(encoding="utf-8").replace('# [[figures]]\n# file = "fig.png"', '[[figures]]\ntable = "t.csv"'), encoding="utf-8")
+        code, out = self.call(s.cmd_build, "20261127", "--typst", str(self.typst))
+        self.assertEqual(code, 0, out)
+        deck = self.hub / "slides/20261127"
+        self.assertEqual(json.loads((deck / "out/check.json").read_text(encoding="utf-8"))["slides"][0]["layout"], "table")
+        source = (deck / "out/deck.typ").read_text(encoding="utf-8")
+        self.assertIn("#text(size: 20pt)[#table(columns: 3,", source)     # 600 x 240 pt at 20 pt fits
+        self.assertIn("align: (left, left, right, )", source)             # the column of numbers
+        self.assertIn('#key("+0.350");', source)
+        self.assertEqual(source.count("table.hline(stroke: 0.5pt + muted)"), 1)   # between 通常 and 希薄
+        rows = [["a", "b"]] + [["x", "1"]] * 3
+        self.assertEqual(s.table_layout(0.0, {z: (40.0 * z, 30.0 * z) for z in s.TABLE_SIZES})["table"][2], 14)
+        self.assertFalse(s.table_layout(0.0, {z: (90.0 * z, 30.0 * z) for z in s.TABLE_SIZES})["fits"])
+        self.assertIn("columns: 2", s.table_typst(rows, 16))
 
     def test_an_archived_deck_keeps_the_library_cards_it_used(self) -> None:
         s = self.slides

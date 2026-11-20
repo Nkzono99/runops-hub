@@ -88,12 +88,19 @@ x = 0.40                         # rect, ellipse: x, y, w, h    arrow: x1, y1 �
 y = 0.13
 text = "電位"
 
+[[figures]]                      # 図の代わりに表を 1 枚に出す
+table = "values.csv"             # 1 行目が見出し。数値の列は右寄せ、1 列目が繰り返すと群の間に罫線が入る
+title = "放出分布ごとのシースの値"   # ** で囲んだ cell は色が付く。収まる最大の文字（20〜12 pt）で組まれる
+
 [source]                         # 出どころ。スライドには出ない
 board = "board の問い"
 read = "projects/dust_charging/analysis/…/README.md"
 runs = "R20261111-0002 R20261111-0003"
 asof = "2026-11-14"
 ```
+
+表は、条件の一覧や、図の元になった値を見せたいときに使う。解析の README の表から必要な行と列を CSV に写し、
+先頭の comment に元の場所を書く。主張そのものは図で示し、表は確かめるための枚として図の後ろに置く。
 
 使い回す card を deck に入れるときは `./hub slides add DECK _library/<project>/<slug>`。
 `_library` の card を直すと、作業中の deck すべてに反映される（archive 済みの deck は写しを持つので変わらない）。
