@@ -170,14 +170,19 @@ class SlidesTest(unittest.TestCase):
         self.assertEqual(code, 0, out)
         deck = self.hub / "slides/20261127"
         check = json.loads((deck / "out/check.json").read_text(encoding="utf-8"))
-        self.assertEqual((check["pages"], check["problems"]), (3, []))
-        self.assertTrue((deck / "out/deck.pdf").is_file() and (deck / "out/png/03.png").is_file())
-        self.assertEqual(check["slides"][0]["layout"], "below")
-        self.assertIn("文に数値が3個", "".join(check["slides"][0]["notes"]))
+        self.assertEqual((check["pages"], check["problems"]), (4, []))     # title, agenda, section cover, card
+        self.assertTrue((deck / "out/deck.pdf").is_file() and (deck / "out/png/04.png").is_file())
+        self.assertEqual([(x["page"], x["layout"]) for x in check["slides"]], [(3, "section"), (4, "below")])
+        self.assertIn("文に数値が3個", "".join(check["slides"][1]["notes"]))
         source = (deck / "out/deck.typ").read_text(encoding="utf-8")
         self.assertIn("今回行ったこと", source)
         self.assertIn("/20261127/cards/height/a.png", source)
         self.assertNotIn("scan/README.md", source)       # the source of a card is not shown
+        self.assertIn('#text(size: 44pt, weight: "light", "高さの研究")', source)   # the cover of the section
+        index = deck / "INDEX.md"
+        index.write_text(index.read_text(encoding="utf-8").replace("- 節の表紙: あり", "- 節の表紙: なし"), encoding="utf-8")
+        code, out = self.call(s.cmd_build, "20261127", "--typst", str(self.typst))
+        self.assertEqual((code, json.loads((deck / "out/check.json").read_text(encoding="utf-8"))["pages"]), (0, 3))
 
         text = self.card("20261127", "height").read_text(encoding="utf-8").replace("高さは効かない", "高" * 40)
         self.card("20261127", "height").write_text(text.replace('open = ""', 'open = "LONG"'), encoding="utf-8")
@@ -196,7 +201,7 @@ class SlidesTest(unittest.TestCase):
         code, out = self.call(s.cmd_build, "20261127", "--typst", str(self.typst))
         self.assertEqual(code, 0, out)
         deck = self.hub / "slides/20261127"
-        self.assertEqual(json.loads((deck / "out/check.json").read_text(encoding="utf-8"))["slides"][0]["layout"], "table")
+        self.assertEqual(json.loads((deck / "out/check.json").read_text(encoding="utf-8"))["slides"][-1]["layout"], "table")
         source = (deck / "out/deck.typ").read_text(encoding="utf-8")
         self.assertIn("#text(size: 20pt)[#table(columns: 3,", source)     # 600 x 240 pt at 20 pt fits
         self.assertIn("align: (left, left, right, )", source)             # the column of numbers

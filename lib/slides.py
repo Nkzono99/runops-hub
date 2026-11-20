@@ -11,7 +11,9 @@
 
 Layout, under ``<hub>/slides/``::
 
-    <deck>/INDEX.md            the order: one ``## section`` per project, one table row per card
+    <deck>/INDEX.md            the order: one ``## section`` per project, one table row per card.
+                               Each section opens with a cover slide (its 表示名 and 説明) unless
+                               the deck says ``- 節の表紙: なし``
     <deck>/cards/<slug>/       card.toml and its figures (copies, so the deck keeps what was shown)
     <deck>/out/                deck.pdf, png/NN.png, check.json
     _library/<section>/<slug>/ cards reused across decks (setups, schematics, model explanations)
@@ -203,7 +205,7 @@ def load_pages(deck: Path, sections: list[dict], problems: list[str]) -> list[di
                 page = {
                     "id": ref if len(figures) == 1 else f"{ref}#{n + 1}",
                     "card": ref, "first": n == 0, "card_title": str(card.get("title", "")),
-                    "section": sec["meta"].get("表示名", sec["name"]),
+                    "section": sec["meta"].get("表示名", sec["name"]), "about": sec["meta"].get("説明", ""),
                     "kind": card.get("kind", "new"),
                     "title": fig.get("title") or str(card.get("title", "")) + (f"：{fig['label']}" if fig.get("label") else ""),
                     "text": fig.get("text") or (card.get("text", {}) if n == 0 else {}),
@@ -411,6 +413,17 @@ def front_typst(meta: dict, sections: list[dict], pages: list[dict]) -> str:
     return "\n".join(out)
 
 
+def section_typst(name: str, about: str, number: int) -> str:
+    """The cover of a section: its name, and one line on what the project is about."""
+    out = ["#page[#align(center + horizon)[", f"#text(size: 44pt, weight: \"light\", {lit(name)})"]
+    if about:
+        out.append(f"#v(4pt)#block(width: {PAGE_W - 200}pt)[#text(size: 20pt, fill: muted, {lit(about)})]")
+    out.append("]")
+    out.append(f"#place(bottom + right, dx: -{MX}pt, dy: -10pt, text(size: 11pt, fill: muted, {lit(str(number))}))")
+    out.append("]")
+    return "\n".join(out)
+
+
 # ---------------------------------------------------------------- build
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess:
@@ -476,7 +489,16 @@ def cmd_build(argv: list[str]) -> int:
 
     # Pass 2: place everything.
     body, report = [head, front_typst(meta, sections, pages)], []
-    for n, p in enumerate(pages, 3):
+    covers = meta.get("節の表紙", "あり").strip() not in ("なし", "無し", "no", "off")
+    n, opened = 2, None
+    for p in pages:
+        n += 1
+        if covers and p["section"] != opened:
+            body.append(section_typst(p["section"], p["about"], n))
+            report.append({"page": n, "id": f"（{p['section']}）", "section": p["section"], "kind": "section", "title": p["section"],
+                           "layout": "section", "figure_share": None, "text_chars": 0, "notes": []})
+            n += 1
+        opened = p["section"]
         if p.get("table"):
             lay = table_layout(heights.get(p["id"], {}).get(aw, 0.0), tables[p["id"]])
         else:
@@ -517,8 +539,8 @@ def cmd_build(argv: list[str]) -> int:
     run(typst + ["compile", "--no-pdf-tags"] + common + [str(out / "deck.typ"), str(out / "deck.pdf")])
     run(typst + ["compile"] + common + ["--ppi", "144", str(out / "deck.typ"), str(out / "png" / "{0p}.png")])
     made = len(list((out / "png").glob("*.png")))
-    if made != len(pages) + 2:
-        problems.append(f"ページ数が合わない（{made} 枚、予定は {len(pages) + 2} 枚）")
+    if made != len(report) + 2:
+        problems.append(f"ページ数が合わない（{made} 枚、予定は {len(report) + 2} 枚）")
     (out / "check.json").write_text(json.dumps({
         "built": datetime.now().astimezone().isoformat(timespec="seconds"), "typst": run(typst + ["--version"]).stdout.strip(),
         "font": font, "pages": made, "problems": problems, "slides": report}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -555,10 +577,12 @@ def cmd_new(argv: list[str]) -> int:
         f"# 進捗スライド {args.deck}\n\n"
         f"- 題: {args.title or '進捗報告'}\n"
         f"- 日付: {'/'.join(day.groups()) if day else date.today().strftime('%Y/%m/%d')}\n"
-        f"- 発表者: {presenter}\n\n"
+        f"- 発表者: {presenter}\n"
+        "- 節の表紙: あり\n\n"
         "この表がスライドの並び順です。節は project ごとで、追加日に関係なくその project の節に入れます。\n"
         "内容の正本は各 card の `card.toml` で、タイトルと区分の列はその写しです。\n"
-        "`_library/` で始まる card は使い回す素材、それ以外は `cards/` にあります。\n", encoding="utf-8")
+        "`_library/` で始まる card は使い回す素材、それ以外は `cards/` にあります。\n"
+        "各節の前に、表示名と説明の表紙が 1 枚入ります（「節の表紙: なし」で入れない）。\n", encoding="utf-8")
     print(f"created {deck}")
     if active:
         print("other decks in progress: " + ", ".join(p.name for p in active))
@@ -573,7 +597,7 @@ def commented(label: str, text: str) -> str:
     return f"# {label}\n" + "".join(f"#   {line}\n" for line in re.split(r"(?<=。)", text.strip()) if line.strip())
 
 
-def append_row(deck: Path, section: str, display: str, ref: str, kind: str, title: str, added: str) -> None:
+def append_row(deck: Path, section: str, display: str, ref: str, kind: str, title: str, added: str, about: str = "") -> None:
     """Add the card at the end of its section; a section that is not there yet goes last."""
     index = deck / "INDEX.md"
     lines = index.read_text(encoding="utf-8").splitlines()
@@ -581,7 +605,8 @@ def append_row(deck: Path, section: str, display: str, ref: str, kind: str, titl
     heads = [i for i, s in enumerate(lines) if s.startswith("## ")]
     start = next((i for i in heads if lines[i][3:].strip() == section), None)
     if start is None:
-        block = ["", f"## {section}", ""] + ([f"- 表示名: {display}", ""] if display else []) + INDEX_HEADER.splitlines() + [row]
+        head = ([f"- 表示名: {display}"] if display else []) + ([f"- 説明: {about}"] if about else [])
+        block = ["", f"## {section}", ""] + (head + [""] if head else []) + INDEX_HEADER.splitlines() + [row]
         lines = lines + block
     else:
         end = next((i for i in heads if i > start), len(lines))
@@ -647,7 +672,8 @@ def cmd_add(argv: list[str]) -> int:
         section = args.section or card.get("section", "")
         if not section:
             die(f"{args.slug} names no section; pass --section")
-        append_row(deck, section, display_of(section), args.slug, card.get("kind", "recap"), card.get("title", ""), today)
+        append_row(deck, section, display_of(section), args.slug, card.get("kind", "recap"), card.get("title", ""), today,
+                   bd.descriptions(HUB).get(section, ""))
         print(f"added {args.slug} to {deck.name} ({section})")
         return 0
 
@@ -707,7 +733,8 @@ def cmd_add(argv: list[str]) -> int:
             + "\n# 出どころ（スライドには出さない）\n[source]\n"
             + "".join(f"{k} = {toml_str(v)}\n" for k, v in source.items() if v))
     (cdir / "card.toml").write_text(card, encoding="utf-8")
-    append_row(deck, args.section, display_of(args.section), ref, kind, args.title or "（タイトル未記入）", today)
+    append_row(deck, args.section, display_of(args.section), ref, kind, args.title or "（タイトル未記入）", today,
+               bd.descriptions(HUB).get(args.section, ""))
     print(f"created {cdir / 'card.toml'}" + (f" with {len(figures)} figure(s)" if figures else ""))
     print("next: write title and [text] in card.toml, build, then open the PNG of the new slide")
     return 0

@@ -33,6 +33,8 @@ slides/
    ./hub slides add 20261127 packing --section grain_packing --title "…" --figure projects/grain_packing/analysis/x/out/fig2.png
    ```
    card は追加日に関係なく、その project の節の末尾に入る。節の中の順番は INDEX.md の行を入れ替えて直す。
+   各節の前には表紙が 1 枚入る（節の `表示名` と `説明`。説明は hub の AGENTS.md の表から写され、INDEX.md で直せる）。
+   deck の先頭の `- 節の表紙: なし` で入れなくできる。
 4. **`card.toml` を書く。** 下の「1 枚の作り方」に従う。
 5. **build して、足した枚の PNG を開く。** `./hub slides build 20261127`。直したら build し直す。
 6. **報告する。** 足した card、何枚目か、開いて確かめた枚、job を使ったなら id と資源。
