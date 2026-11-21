@@ -37,8 +37,8 @@ project の追加・作成、runops の準備、以後の操作は agent が行�
 - **記録は project に置く。** run の観察、結論、知見はその project の `runo note`・`LOG.md`・`notes/` に書く。
   run id は project ごとの番号なので、別 project の run は path で参照する。
 - **project の記録も git で残す。** git repository の project では、作業が一区切りしたら、自分が変えた file を
-  path を指定して commit する（毎回の確認は不要）。他の agent が作業中の file は混ぜない。hub auto の記録
-  （`[auto]` の LOG、by hub-auto の note、auto が作った解析 file）が未 commit なら、別の commit にまとめる。
+  path を指定して commit する（毎回の確認は不要）。他の agent が作業中の file は混ぜない。hub auto の agent が
+  書いたものは、tick の後に hub auto が commit する。
   計算の出力と大きな file は入れない（`.gitignore` で外す）。push は依頼されたときだけ。
 - **全体を見るときは `./hub`。** 「全部の進捗を見て」は `./hub sync` → `./hub status` で答える。
 - **外したもの（`archive/`・`deferred/`、`./hub shelf`）は名指しされたときだけ扱う。** 読むのはその場所のままでよい。

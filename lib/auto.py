@@ -1415,6 +1415,54 @@ def describe_event(event: dict) -> str:
     return json.dumps(event, ensure_ascii=False)
 
 
+def git_changes(project: Path) -> dict[str, float] | None:
+    """Changed and untracked paths of a git project with their mtimes; None outside a repository."""
+    res = subprocess.run(["git", "--literal-pathspecs", "-C", str(project), "status", "--porcelain=v1", "-z",
+                          "--untracked-files=all"], capture_output=True, check=False)
+    if res.returncode != 0:
+        return None
+    changes: dict[str, float] = {}
+    entries = iter(res.stdout.split(b"\0"))
+    for entry in entries:
+        if len(entry) < 4:
+            continue
+        code, path = entry[:2].decode(), os.fsdecode(entry[3:])
+        if code[0] in "RC":
+            next(entries, None)  # the original path of a rename or copy
+        try:
+            changes[path] = (project / path).stat().st_mtime
+        except OSError:
+            changes[path] = -1.0  # deleted
+    return changes
+
+
+def commit_agent_changes(project: Path, tick: str, before: dict[str, float] | None) -> str:
+    """Commit the paths the tick's agent changed (new or changed since ``before``).
+
+    Paths that were already changed and are untouched are left for the people working there.
+    Returns one line for the report, or "" when there is nothing to do.
+    """
+    if before is None:
+        return ""
+    after = git_changes(project) or {}
+    paths = sorted(p for p, mtime in after.items() if before.get(p) != mtime)
+    if not paths:
+        return ""
+    spec = b"".join(os.fsencode(p) + b"\0" for p in paths)
+    base = ["git", "--literal-pathspecs", "-C", str(project)]
+    added = subprocess.run([*base, "add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul"],
+                           input=spec, capture_output=True, check=False)
+    message = f"[auto] {tick} の記録\n\nhub auto の agent が書いた LOG・note・解析の file と run の状態。\n"
+    done = added.returncode == 0 and subprocess.run(
+        [*base, "commit", "-q", "-m", message, "--pathspec-from-file=-", "--pathspec-file-nul"],
+        input=spec, capture_output=True, check=False)
+    if not done or done.returncode != 0:
+        why = (added if added.returncode != 0 else done).stderr.decode(errors="replace").strip().splitlines()
+        return f"git commit failed ({len(paths)} files left uncommitted): {why[-1] if why else 'unknown error'}"
+    head = subprocess.run([*base, "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=False)
+    return f"git commit {head.stdout.strip()} ({len(paths)} files)"
+
+
 def tick_report(tick: str, started: datetime, ended: datetime, works: list[dict], notes: list[str],
                 results: list[dict], stop_reason: str) -> str:
     minutes = (ended - started).total_seconds() / 60
@@ -1438,6 +1486,8 @@ def tick_report(tick: str, started: datetime, ended: datetime, works: list[dict]
         status = f"agent exit {result.get('exit')}" + (f" ({result['reason']})" if result.get("reason") else "")
         lines += ["", f"### {result['project']} — {status}, {result.get('minutes', 0):g} min", ""]
         lines += [f"- {describe_event(e)}" for e in result.get("events", [])]
+        if result.get("commit"):
+            lines.append(f"- {result['commit']}")
         if result.get("events"):
             lines.append("")
         lines.append(result.get("last", "").strip() or "(no final message)")
@@ -1589,8 +1639,12 @@ def _tick_body(config, dry_run, only, agents, sync, should_stop, beat, respect_c
             if agents:
                 say(f"agent in {name} for {len(ids)} runs")
                 beat(state="agent", project=name, tick=tick)
+                before = git_changes(path)
                 result.update(run_agent(config, name, path, tick, tick_dir, prompt, should_stop, beat))
                 say(f"agent in {name} ended: exit {result['exit']} {result['reason']} ({result['minutes']} min)")
+                result["commit"] = commit_agent_changes(path, tick, before)
+                if result["commit"]:
+                    say(f"{name}: {result['commit']}")
             else:
                 result.update(exit=None, reason="no agent (--no-agent)", minutes=0, last="")
             release(name, holder=tick)

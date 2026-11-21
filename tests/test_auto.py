@@ -479,3 +479,49 @@ class AutoTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AutoCommitTest(unittest.TestCase):
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.hub = Path(tmp.name) / "hub"
+        (self.hub / ".hub").mkdir(parents=True)
+        self.auto = load("auto", self.hub)
+        self.project = Path(tmp.name) / "project"
+        self.project.mkdir()
+        env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
+               "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+        patcher = unittest.mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.git("init", "-q")
+        (self.project / "LOG.md").write_text("# Log\n")
+        (self.project / "notes.md").write_text("draft\n")
+        self.git("add", "LOG.md")
+        self.git("commit", "-q", "-m", "start")
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(self.project), *args], capture_output=True, text=True,
+                              check=True).stdout
+
+    def test_commits_only_what_the_agent_changed(self) -> None:
+        before = self.auto.git_changes(self.project)
+        self.assertEqual(set(before), {"notes.md"})
+        time.sleep(0.01)
+        (self.project / "LOG.md").write_text("# Log\n\n## [auto] result\n")
+        (self.project / "analysis").mkdir()
+        (self.project / "analysis" / "fig[1].png").write_bytes(b"png")
+        line = self.auto.commit_agent_changes(self.project, "T1", before)
+        self.assertTrue(line.startswith("git commit "), line)
+        self.assertIn("(2 files)", line)
+        self.assertEqual(self.git("log", "-1", "--format=%s").strip(), "[auto] T1 の記録")
+        self.assertEqual(self.git("status", "--porcelain").split(), ["??", "notes.md"])
+
+    def test_does_nothing_outside_a_repository_or_without_changes(self) -> None:
+        plain = self.project.parent / "plain"
+        plain.mkdir()
+        self.assertIsNone(self.auto.git_changes(plain))
+        self.assertEqual(self.auto.commit_agent_changes(plain, "T1", None), "")
+        before = self.auto.git_changes(self.project)
+        self.assertEqual(self.auto.commit_agent_changes(self.project, "T1", before), "")
