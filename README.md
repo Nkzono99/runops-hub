@@ -63,6 +63,7 @@ hub/
 ├── board.html             全 project の「分かっていること / 残る問い」（sync で更新）
 ├── projects/              各 runops project への symlink（例: projects/crater/）
 ├── papers/                各 paperops 論文への symlink（例: papers/sheath/）
+├── archive/, deferred/    一覧から外した project・論文の symlink（./hub archive / defer）
 ├── slides/                進捗スライドの deck・card・archive
 └── .hub/                  hub 本体のコード・Python path・状態
 ```

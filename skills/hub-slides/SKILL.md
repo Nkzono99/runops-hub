@@ -61,6 +61,8 @@ slides/
   `ai_image = "道具の名前"` を書く。build が図の右下に「生成AI画像」の印を出す。結果の可視化と見分けが付かなくなるのを防ぐ。
   script で描いた図（計算結果の可視化、手で配置した模式図）には付けない。計算結果でない模式図は、図の中に「模式図」と書く。
 - **スライドに出さないもの。** 出どころの path、run id、確認日は `[source]` に書く。build はそれを表示しない。
+  project・論文の中の file は、`projects/<name>/…` の link 経由ではなく実体の絶対 path で書く
+  （`./hub archive`・`defer` で link が `archive/` などへ動くため。`add` が写す `from`・`read` も絶対 path になる）。
 
 描き直す範囲: 主張がある新規の結果は、主張を示す図を描く。おさらいや分布図は、解析の図に label を重ねるのを
 基本にする。ただし、英語や細かい文字のままで読みにくいなど、描き直した方がだいぶ良くなるなら描き直してよい。
@@ -81,7 +83,7 @@ limits = "単一 seed など、結果の限界（小さく出る）"
 
 [[figures]]                      # 複数並べると、枚数分のスライドになる
 file = "fig.png"
-from = "projects/dust_charging/analysis/…/fig.png"   # 元の図。変わると build が知らせる
+from = "/LARGE1/…/project_dust_charging/analysis/…/fig.png"   # 元の図の実体の path。変わると build が知らせる
 sha256 = "…"
 label = "電位"                   # タイトルの後ろに付く。title = "…" なら、その枚だけ別のタイトル
 inset = "_library/conductor_with_terrain/geometry/fig.png"   # 右上隅の小さな図
@@ -102,7 +104,7 @@ title = "放出分布ごとのシースの値"   # ** で囲んだ cell は色�
 
 [source]                         # 出どころ。スライドには出ない
 board = "board の問い"
-read = "projects/dust_charging/analysis/…/README.md"
+read = "/LARGE1/…/project_dust_charging/analysis/…/README.md"
 runs = "R20261111-0002 R20261111-0003"
 asof = "2026-11-14"
 ```

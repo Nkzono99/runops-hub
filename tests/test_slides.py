@@ -113,9 +113,10 @@ class SlidesTest(unittest.TestCase):
         card = tomllib.loads(raw)
         self.assertEqual(card["section"], "alpha")
         self.assertEqual(card["figures"][0]["file"], "a.png")
-        self.assertEqual(card["figures"][0]["from"], "projects/alpha/analysis/scan/out/a.png")
+        alpha = (self.hub / "projects/alpha").resolve()      # real paths: the link moves when it is set aside
+        self.assertEqual(card["figures"][0]["from"], str(alpha / "analysis/scan/out/a.png"))
         self.assertEqual(card["source"]["board"], "高さは効くか")
-        self.assertEqual(card["source"]["read"], "projects/alpha/analysis/scan/README.md")
+        self.assertEqual(card["source"]["read"], str(alpha / "analysis/scan/README.md"))
         self.assertIn("#   効かない。", raw)            # the answer is left as a comment to condense
         self.assertIn("帯が目安", raw)
         self.assertTrue((self.card("20261127", "height").parent / "a.png").is_file())
@@ -123,7 +124,7 @@ class SlidesTest(unittest.TestCase):
         self.assertIn("- 表示名: 高さの研究", index)
         self.assertIn("| `height` | 新規 |", index)
 
-    def test_a_figure_from_a_paper_is_recorded_through_the_papers_link(self) -> None:
+    def test_a_figure_from_a_paper_is_recorded_by_its_real_path(self) -> None:
         s = self.slides
         paper = self.hub.parent / "paper-x"
         png(paper / "figures" / "f" / "f.png", 800, 400)
@@ -132,7 +133,7 @@ class SlidesTest(unittest.TestCase):
         self.call(s.cmd_new, "20261127")
         self.call(s.cmd_add, "20261127", "fig", "--section", "x", "--title", "図", "--figure", "papers/x/figures/f/f.png")
         card = tomllib.loads(self.card("20261127", "fig").read_text(encoding="utf-8"))
-        self.assertEqual(card["figures"][0]["from"], "papers/x/figures/f/f.png")
+        self.assertEqual(card["figures"][0]["from"], str(paper.resolve() / "figures/f/f.png"))
 
     def test_cards_are_filed_under_their_section_whatever_the_order_added(self) -> None:
         s = self.slides

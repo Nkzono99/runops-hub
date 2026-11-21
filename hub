@@ -12,9 +12,9 @@
 #   ./hub new NAME SIM... --desc TEXT          create ../project_NAME with runo init and add it
 #   ./hub attach NAME PATH SIM... --desc TEXT  add an existing runops project
 #   ./hub detach NAME        drop a finished project from the hub (symlink only)
-#   ./hub defer TARGET [--why TEXT] [--until DATE]   set a project or paper aside to come back to
-#   ./hub archive TARGET [--why TEXT]   set a finished or stopped one aside (link and data stay)
-#   ./hub restore TARGET     bring it back      ./hub shelf     list what is set aside (lib/shelf.py)
+#   ./hub defer TARGET [--why TEXT] [--until DATE]   move a project or paper's link to deferred/ (back later)
+#   ./hub archive TARGET [--why TEXT]   move it to archive/ (done or stopped; the data stays where it is)
+#   ./hub restore TARGET     move it back      ./hub shelf     list what is set aside (lib/shelf.py)
 #   ./hub term NAME          open (or re-attach) the tmux session for one project
 #   ./hub sessions           show direct tmux/claude/codex sessions per project (this node)
 #   ./hub logs [DIR [--apply]]  list job log locations or collect loose logs in DIR/logs/
@@ -83,6 +83,15 @@ relink() { "$PY" "$code/lib/relink.py" "$@"; }
 sessions() { "$PY" "$code/lib/sessions.py" || { echo "!! session listing failed (exit $?)"; return 1; }; }
 projects() { "$PY" "$code/lib/projects.py" "$@"; }
 
+# Whether NAME is used by a member, in use or set aside.
+taken() {
+  local at
+  for at in "$hub/projects/$1" "$hub/deferred/projects/$1" "$hub/archive/projects/$1"; do
+    [ -e "$at" ] || [ -L "$at" ] && return 0
+  done
+  [ -f "$hub/$1/runops.toml" ]
+}
+
 # SIM... --desc TEXT (what follows the leading arguments of new / attach) -> sims, desc
 parse_sims_desc() {
   sims=(); desc=""
@@ -109,12 +118,16 @@ case "$cmd" in
   term|detach)
     name=${2:-}
     name=${name%/}
+    name=${name#archive/}
+    name=${name#deferred/}
     name=${name#projects/}
     if [[ -z "$name" || "$name" = .* || "$name" = */* ]]; then
       echo "usage: ./hub $cmd NAME" >&2; exit 2
     fi
-    link="$hub/projects/$name"
-    [ -f "$link/runops.toml" ] || link="$hub/$name"
+    # in use, an older hub's layout, or set aside (./hub defer / archive)
+    for link in "$hub/projects/$name" "$hub/$name" "$hub/deferred/projects/$name" "$hub/archive/projects/$name"; do
+      [ -f "$link/runops.toml" ] && break
+    done
     if [ ! -f "$link/runops.toml" ]; then
       echo "usage: ./hub $cmd NAME   (NAME must be a member project in $hub)" >&2; exit 2
     fi
@@ -129,6 +142,9 @@ case "$cmd" in
         rm "$legacy" || exit 1
       fi
       rm "$link" || exit 1
+      case "$link" in  # drop archive/projects/ and archive/ once empty
+        "$hub/deferred/"*|"$hub/archive/"*) rmdir "$(dirname "$link")" 2>/dev/null && rmdir "$(dirname "$(dirname "$link")")" 2>/dev/null ;;
+      esac
       projects remove "$name" && relink || exit 1
       echo "detached $name ($dir)"
       exit 0
@@ -151,7 +167,7 @@ case "$cmd" in
       exit 2
     fi
     dir="$(dirname "$hub")/project_$name"
-    if [ -e "$hub/projects/$name" ] || [ -L "$hub/projects/$name" ] || [ -f "$hub/$name/runops.toml" ] || [ -e "$dir" ] || [ -L "$dir" ]; then
+    if taken "$name" || [ -e "$dir" ] || [ -L "$dir" ]; then
       echo "project $name or $dir already exists" >&2; exit 2
     fi
     mkdir "$dir" || exit 1
@@ -173,7 +189,7 @@ case "$cmd" in
       echo 'usage: ./hub attach NAME PATH SIM... --desc "one-line goal"   (PATH: an existing runops project)' >&2
       exit 2
     fi
-    if [ -e "$hub/projects/$name" ] || [ -L "$hub/projects/$name" ] || [ -f "$hub/$name/runops.toml" ]; then
+    if taken "$name"; then
       echo "project $name already exists" >&2; exit 2
     fi
     dir=$(cd "$path" && pwd -P)

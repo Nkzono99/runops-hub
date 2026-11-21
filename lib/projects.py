@@ -3,15 +3,19 @@
 
     projects.py list                             member projects in use (not set aside), one path a line
     projects.py add NAME SIMULATOR DESCRIPTION   append a row (no-op if NAME is listed)
-    projects.py remove NAME                      drop the row of NAME (and its entry on the shelf)
+    projects.py remove NAME                      drop the row of NAME (and its notes on the shelf)
     projects.py shelf-line                       one line on what is set aside, or nothing
 
-A member project or a paper can be set aside on the shelf (``./hub archive`` / ``defer``,
-lib/shelf.py). Its link and data stay where they are, so paths written elsewhere keep working;
-``member_paths`` and ``paper_paths`` leave it out unless asked, so every view and loop of the
-hub skips it. The shelf is ``.hub/shelf.toml``: one table per link, keyed by its path from the
-hub (``"projects/NAME"``, ``"papers/NAME"``), with ``state`` = ``deferred`` (back later) or
-``archived`` (done or stopped).
+Where a link sits says what it is (lib/shelf.py moves it: ./hub defer / archive / restore):
+
+    projects/NAME, papers/NAME                      in use
+    deferred/projects/NAME, deferred/papers/NAME    set aside, back later
+    archive/projects/NAME, archive/papers/NAME      set aside, done or stopped
+
+``member_paths`` and ``paper_paths`` return those in use unless asked for all, so every view and
+loop of the hub skips what is set aside. ``.hub/shelf.toml`` keeps notes on each one set aside
+(since, until, why, its row of the table in AGENTS.md), keyed by where it sits in use
+(``"projects/NAME"``, ``"papers/NAME"``); the location, not the notes, decides the state.
 """
 from __future__ import annotations
 
@@ -32,7 +36,8 @@ except ModuleNotFoundError:  # pragma: no cover
 AGENTS = Path(os.environ.get("RUNOPS_HUB_DIR") or Path.cwd()).resolve() / "AGENTS.md"
 HEADER = "| dir | simulator | 内容 |"
 PAPER_HEADER = "| dir | source | 内容 |"
-STATES = ("deferred", "archived")
+SHELVES = {"deferred": "deferred", "archived": "archive"}  # state -> the directory under the hub that holds it
+KINDS = ("projects", "papers")
 
 
 # ---------------------------------------------------------------- the shelf
@@ -42,21 +47,21 @@ def shelf_file(hub: Path) -> Path:
 
 
 def load_shelf(hub: Path) -> dict[str, dict]:
-    """{path from the hub: entry} of what is set aside. An unreadable shelf hides nothing."""
+    """{"projects/NAME" or "papers/NAME": notes} for what is set aside. Unreadable notes read as none."""
     path = shelf_file(hub)
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
     except (OSError, tomllib.TOMLDecodeError) as exc:
-        print(f"!! {path} is not readable ({exc}); nothing is treated as set aside", file=sys.stderr)
+        print(f"!! {path} is not readable ({exc}); the notes on what is set aside are ignored", file=sys.stderr)
         return {}
-    return {k: v for k, v in data.items() if isinstance(v, dict) and v.get("state") in STATES}
+    return {k: v for k, v in data.items() if isinstance(v, dict)}
 
 
 def save_shelf(hub: Path, entries: dict[str, dict]) -> None:
-    out = ["# Members and papers set aside. ./hub archive / defer write an entry, ./hub restore removes it.",
-           "# state: deferred (back later) or archived (done or stopped). why and until may be edited by hand.",
+    out = ["# Notes on the members and papers set aside (archive/, deferred/). ./hub archive / defer write them,",
+           "# ./hub restore removes them. why and until may be edited by hand; where the link sits decides the state.",
            ""]
     for key in sorted(entries):
         out.append(f"[{json.dumps(key)}]")
@@ -73,7 +78,7 @@ def save_shelf(hub: Path, entries: dict[str, dict]) -> None:
 
 @contextmanager
 def shelf_lock(hub: Path):
-    """Hold .hub/shelf.lock while reading and rewriting the shelf (flock works across login nodes on /LARGE*)."""
+    """Hold .hub/shelf.lock while moving links and rewriting the notes (flock works across login nodes on /LARGE*)."""
     (hub / ".hub").mkdir(parents=True, exist_ok=True)
     with open(hub / ".hub" / "shelf.lock", "w") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
@@ -83,9 +88,27 @@ def shelf_lock(hub: Path):
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
+def shelved(hub: Path) -> list[dict]:
+    """What is set aside: {state, kind ("projects" | "papers"), name, key, link}, by state, kind and name.
+
+    A link whose target is gone is listed too, so that it can be seen and restored or removed.
+    """
+    found = []
+    for state, top in SHELVES.items():
+        for kind in KINDS:
+            parent = hub / top / kind
+            if not parent.is_dir():
+                continue
+            for link in sorted(parent.iterdir()):
+                if not link.name.startswith(".") and (link.is_symlink() or link.is_dir()):
+                    found.append({"state": state, "kind": kind, "name": link.name, "key": f"{kind}/{link.name}",
+                                  "link": link})
+    return found
+
+
 def shelved_projects(hub: Path) -> set[str]:
     """Names of the member projects set aside."""
-    return {key.split("/")[-1] for key in load_shelf(hub) if not key.startswith("papers/")}
+    return {item["name"] for item in shelved(hub) if item["kind"] == "projects"}
 
 
 def is_due(entry: dict) -> bool:
@@ -96,27 +119,24 @@ def is_due(entry: dict) -> bool:
 
 
 def shelf_line(hub: Path) -> str:
-    """``shelf: deferred 2 (a until 12-01, papers/b), archived 3 — ./hub shelf``, or "" when the shelf is empty."""
-    entries = load_shelf(hub)
-    if not entries:
-        return ""
+    """``shelf: deferred 2 (a until 12-01, papers/b), archived 3 — ./hub shelf``, or "" when nothing is set aside."""
+    items, notes = shelved(hub), load_shelf(hub)
     parts = []
-    for state in STATES:
-        keys = sorted(k for k, v in entries.items() if v["state"] == state)
+    for state in SHELVES:
+        keys = [i["key"] for i in items if i["state"] == state]
         if not keys:
             continue
         if state == "deferred":
             shown = []
             for key in keys:
-                label = key.removeprefix("projects/")
-                until = entries[key].get("until", "")
+                label, until = key.removeprefix("projects/"), notes.get(key, {}).get("until", "")
                 if until:
-                    label += f" until {until[5:]}" + (", due" if is_due(entries[key]) else "")
+                    label += f" until {until[5:]}" + (", due" if is_due(notes[key]) else "")
                 shown.append(label)
             parts.append(f"deferred {len(keys)} ({', '.join(shown)})")
         else:
             parts.append(f"archived {len(keys)}")
-    return f"shelf: {', '.join(parts)} — ./hub shelf"
+    return f"shelf: {', '.join(parts)} — ./hub shelf" if parts else ""
 
 
 # ---------------------------------------------------------------- members and papers
@@ -124,26 +144,29 @@ def shelf_line(hub: Path) -> str:
 def member_paths(hub: Path, shelved: bool = False) -> list[Path]:
     """Member projects (links with a runops.toml) under projects/ and, from older hubs, the hub itself.
 
-    The nested entry wins when both exist. Projects on the shelf are left out unless *shelved*.
+    With *shelved*, those under deferred/projects/ and archive/projects/ too. When a name sits in
+    several places, projects/ wins, then the older layout.
     """
-    hidden = set() if shelved else shelved_projects(hub)
+    parents = [hub / top / "projects" for top in SHELVES.values()] if shelved else []
     members = {}
-    for parent in (hub, hub / "projects"):
+    for parent in (*parents, hub, hub / "projects"):
         if parent.is_dir():
             for path in parent.iterdir():
-                if not path.name.startswith(".") and path.name not in hidden and (path / "runops.toml").is_file():
+                if not path.name.startswith(".") and (path / "runops.toml").is_file():
                     members[path.name] = path
     return [members[name] for name in sorted(members)]
 
 
 def paper_paths(hub: Path, shelved: bool = False) -> list[Path]:
-    """The directories under papers/ (links to paperops projects). Papers on the shelf are left out unless *shelved*."""
-    papers = hub / "papers"
-    if not papers.is_dir():
-        return []
-    hidden = set() if shelved else set(load_shelf(hub))
-    return sorted(p for p in papers.iterdir()
-                  if p.is_dir() and not p.name.startswith(".") and f"papers/{p.name}" not in hidden)
+    """The directories under papers/ (links to paperops projects); with *shelved*, those set aside too."""
+    parents = [hub / top / "papers" for top in SHELVES.values()] if shelved else []
+    papers = {}
+    for parent in (*parents, hub / "papers"):
+        if parent.is_dir():
+            for path in parent.iterdir():
+                if path.is_dir() and not path.name.startswith("."):
+                    papers[path.name] = path
+    return [papers[name] for name in sorted(papers)]
 
 
 # ---------------------------------------------------------------- the tables in AGENTS.md

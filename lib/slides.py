@@ -686,14 +686,12 @@ def board_row(member: Path, text: str) -> dict:
     return rows[0]
 
 
-def origin_of(path: Path, members: dict[str, Path]) -> str:
-    """Where a figure came from, written from the hub: through the link when it is in a member project or a paper."""
-    papers = HUB / "papers"
-    links = list(members.values()) + (sorted(p for p in papers.iterdir() if p.is_symlink()) if papers.is_dir() else [])
-    for link in links:
-        real = link.resolve()
-        if real in path.parents:
-            return f"{link.relative_to(HUB).as_posix()}/{path.relative_to(real).as_posix()}"
+def origin_of(path: Path) -> str:
+    """Where a figure came from: its real path, or the path from the hub for a file of the hub itself.
+
+    A file of a member or a paper is not written through its link (projects/NAME/...), because
+    ./hub archive and defer move the link.
+    """
     return path.relative_to(HUB).as_posix() if HUB in path.parents else str(path)
 
 
@@ -753,7 +751,7 @@ def cmd_add(argv: list[str]) -> int:
             die(f"--board needs --section to be a member project ({', '.join(members)})")
         row = board_row(members[args.section], args.board)
         how, fig = bd.figure_of(row.get(bd.FIGURE, ""))
-        base = f"projects/{args.section}" if (HUB / "projects" / args.section).exists() else args.section
+        base = str(members[args.section].resolve())  # the real path: the link moves when it is set aside
         if fig and not figures:
             path = (members[args.section] / "analysis" / fig)
             if not path.is_file():
@@ -773,8 +771,8 @@ def cmd_add(argv: list[str]) -> int:
         while (cdir / name).exists():
             name = f"{Path(name).stem}-{len(blocks) + 1}{Path(name).suffix}"
         shutil.copy2(path, cdir / name)
-        origin = origin_of(path, members)
-        blocks.append(f"[[figures]]\nfile = {toml_str(name)}\nfrom = {toml_str(origin)}        # 元の図（hub からの path）\n"
+        origin = origin_of(path)
+        blocks.append(f"[[figures]]\nfile = {toml_str(name)}\nfrom = {toml_str(origin)}        # 元の図（実体の path）\n"
                       f"sha256 = {toml_str(sha256(path))}\n"
                       '# ai_image = "道具の名前"   # 画像生成 AI で作った絵なら書く（スライドに印が出る）\n')
     kind = "recap" if args.recap or args.library else "new"
