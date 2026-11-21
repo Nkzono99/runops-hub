@@ -27,6 +27,7 @@ packages = ["src/runops_hub"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "hub" = "runops_hub/_runtime/hub"
+"lib/auto.py" = "runops_hub/_runtime/lib/auto.py"
 "lib/board.py" = "runops_hub/_runtime/lib/board.py"
 "lib/logs.py" = "runops_hub/_runtime/lib/logs.py"
 "lib/projects.py" = "runops_hub/_runtime/lib/projects.py"
@@ -38,6 +39,8 @@ packages = ["src/runops_hub"]
 "templates/AGENTS.md" = "runops_hub/_runtime/templates/AGENTS.md"
 "templates/vscode-settings.json" = "runops_hub/_runtime/templates/vscode-settings.json"
 "templates/member_section.md" = "runops_hub/_runtime/templates/member_section.md"
+"templates/auto_config.toml" = "runops_hub/_runtime/templates/auto_config.toml"
+"templates/auto_tick.md" = "runops_hub/_runtime/templates/auto_tick.md"
 "LICENSE" = "runops_hub/_runtime/LICENSE"
 
 [tool.hatch.build.targets.sdist]

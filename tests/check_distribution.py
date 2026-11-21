@@ -41,6 +41,11 @@ def check(artifact: Path, uv: str, base: Path) -> dict:
     (project / "AGENTS.md").write_text("# Existing project\n")
     run("bash", str(workspace / "hub"), "attach", "example", str(project), "generic", "--desc", "existing project")
     run("bash", str(workspace / "hub"), "relink", "--check")
+    run("bash", str(workspace / "hub"), "auto", "enable", "example", "--no-continue", "--no-derive")
+    assert "[projects.example]" in (workspace / "auto/config.toml").read_text()
+    assert "hub auto" in (project / "AGENTS.md").read_text()
+    assert "example (analyze)" in run("bash", str(workspace / "hub"), "auto", "status").stdout
+    run("bash", str(workspace / "hub"), "auto", "disable", "example")
     custom = (workspace / "AGENTS.md").read_text() + "\nMy custom rule\n"
     (workspace / "AGENTS.md").write_text(custom)
     run(*init)

@@ -252,6 +252,18 @@ def print_unconcluded(unwritten: dict[str, list[tuple[str, str]]]) -> None:
             print(f"  {name}: {len(runs)} runs, oldest {oldest}d ({some_ids(ids)})")
 
 
+def print_auto() -> None:
+    """hub auto's state, its claims (runs to leave alone) and what waits for the person."""
+    try:
+        import auto  # lib/auto.py imports this module, so it is loaded only here
+        lines = auto.summary_lines()
+    except Exception as exc:  # the status view must not fail because of auto
+        lines = [f"hub auto: !! could not read auto/ ({exc})"]
+    if lines:
+        print()
+        print("\n".join(lines))
+
+
 def main() -> int:
     mark = "--peek" not in sys.argv[1:]
     status = 0
@@ -295,6 +307,7 @@ def main() -> int:
         print("\nno active runs")
     print_changes(load_seen(), statuses)
     print_unconcluded(unwritten)
+    print_auto()
     if mark and status == 0:
         save_seen(statuses)
     return status

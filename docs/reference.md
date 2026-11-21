@@ -18,6 +18,7 @@ run の作成・投入・中止など状態を変える `runo` コマンドは�
 | `./hub relink [--check] [-v]` | skill の link と、project・論文の実体 directory に対する Claude Code 設定を揃える |
 | `./hub sessions` | この node で各 project に開いている tmux・claude・codex |
 | `./hub term NAME` | project の tmux session に入る |
+| `./hub auto [status\|start\|pause\|resume\|stop\|tick\|enable\|...]` | 定期実行の agent（下の「定期実行の agent」）。`./hub auto help` で command 一覧 |
 
 ## `./hub status` の 2 つの表示
 
@@ -59,6 +60,38 @@ run の作成・投入・中止など状態を変える `runo` コマンドは�
 指定したディレクトリの直下で、Git 管理外かつ `sacct` で終了を確認できたファイルを、同じ名前で `logs/` へ移します（失敗したジョブも対象）。同名の別ファイル、runops の実行ログ、既存の `logs/` は保持します。外部の文書から直リンクしているファイルは移動するとパスが変わります。
 
 新しいジョブでは投入前に出力先を作り、解析ならその解析の `logs/`、PDF なら論文の `build/logs/` に標準出力・エラーを指定します。hub を VS Code で開くと、ワークスペースの `files.exclude` が解析・図・run の作業場所などにあるジョブログをエクスプローラーから隠します（表示は `.vscode/settings.json` で切り替え可能。初期化時は既存の VS Code 設定を優先します）。
+
+## 定期実行の agent（`./hub auto`）
+
+完了した run の解析と、明らかに必要な追加計算（継続・小さい派生）の投入を、決まった間隔で agent に任せます。
+
+1 回分（tick）の流れ:
+
+1. **前処理（script）**: 有効な project で `runo sync` し、`auto/ledger.jsonl` と manifest を突き合わせて、途中で
+   止まった投入を片付け、同じ入力・同じ親の継続の重複を見つけたら auto の方を取り消します。続いて、完了・失敗から
+   `quiet_hours` たっても LOG・note・解析の file に run id が出てこない run を集めます（`./hub status` と同じ判定）。
+   無ければここで終わり、agent は起動しません。
+2. **判断（agent）**: project ごとに run を予約（`auto/claims/`、期限付き）し、`codex exec` を project で起動します。
+   sandbox は workspace-write で、書けるのは project と `auto/` だけです。指示は `templates/auto_tick.md`
+   （`auto/ticks/ID/PROJECT.prompt.md` に実際の文面が残ります）。
+3. **投入（gate）**: agent は `hub auto submit RUN --kind continue|derive` で投入し、script が予算、継続の条件、重複、
+   hold、show_my_time の残りを調べてから `runo submit` します。通らないものは `hub auto propose` で提案になり、
+   人が `./hub auto approve N` で投入します。tick の間は `auto/bin/sbatch`・`tssrun` が PATH の先頭にあり、
+   解析 job の枠（`[analysis]`）を超える直接の投入を拒否します。
+4. **後処理（script）**: 予約を外し、agent の最後のメッセージと台帳の出来事を `auto/reports/YYYY-MM.md` に追記します。
+
+| file（`auto/` の下） | 中身 |
+|---|---|
+| `config.toml` | 間隔、予算、解析 job の枠、継続とみなす key、対象の project（`enable`・`disable` が書き換える） |
+| `control.json` | 人の指示（run・paused・stopped、`now`、`kick`）。ループは `POLL`（10 秒）ごとに読む |
+| `heartbeat.json` | ループの host・pid・状態。`status` はこれと `loop.lock` の flock から生死を判断する |
+| `ledger.jsonl` | 投入（planned → submit / submit-failed）、解析 job、提案、defer、release、取り消し |
+| `claims/`、`holds.json`、`proposals/` | 予約（期限付き）、触らせない対象、提案 |
+| `reports/`、`ticks/`、`loop.log` | tick ごとの報告、tick の作業 file（`keep_tick_days` 日で消える）、ループのログ |
+
+止める・再開する command は `auto/control.json` を書くだけなので、どの ssh session・login node からでも効きます。
+`/LARGE0`・`/LARGE1` の flock は login node をまたぐため、別の node から `start` してもループは 2 つになりません。
+ループの process が別の node で固まったとき（`status` が HUNG と出す）だけは、その node で `./hub auto stop --force` が要ります。
 
 ## hub 本体の更新
 

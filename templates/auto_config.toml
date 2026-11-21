@@ -1,0 +1,52 @@
+# hub auto の設定。今の状態は ./hub auto status、command は ./hub auto help。
+# 変えた値は次の tick から効く（ループの再起動は要らない）。
+# core-h はすべて物理コア（--rsc の p × c）× 時間で数える。
+
+[auto]
+interval_min = 120           # この間隔で runo sync と仕事の一覧を作る。仕事が無ければ agent は起動しない
+quiet_hours = 6              # 完了・失敗からこの時間がたち、まだ誰も記録していない run だけを扱う
+claim_hours = 3              # tick が run を予約する期限（途中で止まっても期限で外れる）
+agent_timeout_min = 90       # project ごとの agent の時間上限
+max_runs_per_project = 8     # 1 回の tick で 1 project の agent に渡す run の上限（残りは次の tick）
+max_auto_chain = 3           # auto の継続が人の run から何回続いたら、次は提案に回すか
+give_up_after = 2            # 何回の tick で記録されなかった run を諦めるか（./hub auto release で戻す）
+pause_after_failures = 3     # agent の失敗した tick がこの回数続いたら自分で pause する（認証切れなど）
+runner = ["codex", "exec"]
+runner_args = []             # 例: ["-m", "MODEL", "-c", "model_reasoning_effort=\"high\""]
+sandbox = "workspace-write"  # agent が書けるのは project と auto/ だけ
+keep_tick_days = 30          # auto/ticks/ を残す日数
+
+[budget]
+window_days = 7              # 直近この日数に投入した分を数える（終わった job は実績、他は cores × walltime）
+total = 50000                # 合計（継続・派生・解析 job）
+derived_total = 10000        # うち派生
+derived_per_run = 500        # 派生 1 本
+continue_per_run = 12000     # 継続 1 本（さらに親 run の実績 × continue_parent_factor まで）
+continue_parent_factor = 1.0
+max_cores = 560              # auto が投入して待機・実行中の job のコア数の合計
+floor_fraction = 0.10        # show_my_time の残りが割当のこの割合を切ったら、floor_partitions への投入を止める
+floor_partitions = ["gr20001a"]
+
+[budget.partition]           # partition ごとの合計。ここに無い partition には auto は投入しない
+gr20001a = 20000
+hpa = 30000
+gr10451a = 30000
+
+[analysis]                   # agent が直接 sbatch / tssrun できる解析 job の上限（超えるものは拒否する）
+partitions = ["gr10451a"]
+max_cores = 32
+max_hours = 1.0
+
+[continue]                   # 継続とみなす条件。親 run から変えてよい job の key
+job_keys = ["walltime", "partition", "pre_commands", "memory", "job_name"]
+
+[continue.keys]              # 親 run から変えてよい入力の key（simulator の adapter ごと、fnmatch の型）
+beach = ["run.batch_count"]
+emses = ["jobcon.nstep", "jobcon.jobnum", "jobcon.resume", "jobcon.checkpoint_*"]
+emses_checkpoint = ["jobcon.nstep", "jobcon.jobnum", "jobcon.resume", "jobcon.checkpoint_*"]
+grain = ["run.steps", "checkpoint.*", "output.*"]
+
+# 対象の project。./hub auto enable NAME / disable NAME が書き換える。
+#   analyze  完了・失敗した run を解析して LOG に書く（false なら sync だけ）
+#   continue 継続を投入する / derive 小さい派生を投入する（false なら提案に回す）
+#   total    この project の週の上限（core-h、省略可）

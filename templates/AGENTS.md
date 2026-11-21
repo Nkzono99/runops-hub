@@ -52,8 +52,22 @@ project の追加・作成、runops の準備、以後の操作は agent が行�
 | `./hub attach NAME PATH SIM... --desc TEXT` | 既にある runops project を hub に加える |
 | `./hub detach NAME` | 終了した project を hub から外す（symlink と表の行を消す。実体は残る） |
 | `./hub term NAME` | 人が使う。project の tmux session に入る（無ければ作る） |
+| `./hub auto [status\|start\|pause\|resume\|stop\|tick\|enable\|...]` | 定期実行の agent（下の「自動運用」）。command は `./hub auto help` |
 
 `./hub` は読み取りと保守のための道具で、run を変える `runo` は対象 project の中で実行する。
+
+## 自動運用（hub auto）
+
+`./hub auto` のループは、`auto/config.toml` で有効にした project を一定間隔で `runo sync` し、完了・失敗から
+しばらくたっても記録の無い run があれば、project ごとに `codex exec` を起動して解析させ、明らかに必要な継続と
+小さい派生を週の予算内で投入させる。仕事が無い回は agent を起動しない。設定・状態・記録はすべて `auto/` にある。
+
+- **有効にする project は人が決める。** `./hub auto enable NAME [--no-continue] [--no-derive]` / `disable NAME`。
+- **auto の枠内の投入は承認済み。** 有効な project で `hub auto submit` の検査（`auto/config.toml` の予算、継続の条件、
+  重複）を通った投入は、事前確認の規則の例外とする。枠を超えるものは提案に積まれ、`./hub auto approve N` で投入する。
+- **作業 agent は auto の予約を避ける。** `./hub status` と `./hub auto status` に出る claim の run には触らない。
+  急ぐなら `./hub auto release PROJECT/RUN`、触らせたくない run・project は `./hub auto hold TARGET`。
+- **止める・再開する**: `./hub auto pause [--now]`、`resume`、`stop [--now]`。どの ssh session・login node からでも効く。
 
 ## Skills
 
