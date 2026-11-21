@@ -46,7 +46,7 @@ project の追加・作成、runops の準備、以後の操作は agent が行�
 |---|---|
 | `./hub sync` / `list [--json]` / `context` | 全 project で同じ `runo` を実行（`list`・`context` は先頭に直接 session も表示） |
 | `./hub status [--peek]` | 全 project の件数と active run、前回の確認以降に状態が変わった run、完了後に LOG・note・解析 file に run id が出てこない run。`./hub sync` の後に使う。作業の途中で見るだけなら `--peek` |
-| `./hub board` | 人が見る `board.html` を作り直す。各 project の「分かっていること」（結論、図、図の読み方）と「まだ分かっていないこと」だけを並べ、進捗や経緯は載せない。`./hub sync` のたびにも作り直される。元は各 project の `analysis/README.md` の `<!-- board -->` の表。表の答えは、解析を確かめた agent が判断して足す・直し（図を開いて確かめ、LOG か解析の README に記録した結論、限界も書く）、報告で変えた行を示す |
+| `./hub board` | 人が見る `board.html` を作り直す。各 project の「分かっていること」（結論、図、図の読み方）と「まだ分かっていないこと」だけを並べ、進捗や経緯は載せない。`./hub sync` のたびにも作り直される。元は各 project の `analysis/README.md` の `<!-- board -->` の表。表の答えは、解析を確かめた agent が判断して足す・直し（図を開いて確かめ、LOG か解析の README に記録した結論、限界も書く）、報告で変えた行を示す。board は人がスライドの感覚で読む画面で、カードには「見出し」（問いなしで通じる結論の一言）・図・「要点」（決め手の数値入りで 80 字前後）・「条件」（その結果の条件と限界）と、表の前の `- 模式図:` と「計算の設定 | 値」の表（計算の設定を模式図と表で。模式図は project の `analysis/board-setting/` の script で描く）が出る。「いまの答え」は全文の記録として畳まれるので、答えを直したらこの 3 列も直す |
 | `./hub doctor` / `update` | 環境と skill の検査 / 更新（`update` の後は skill link も張り直す） |
 | `./hub sessions` | この login node で各 project に開いている tmux・claude・codex |
 | `./hub logs [DIR [--apply]]` | 各 project・論文・hub のジョブログを場所別に一覧する。`DIR` 指定で直下を確認し、`--apply` で終了したジョブのログを `DIR/logs/` にまとめる。解析・図・PDF の新しいジョブは投入前に作業場所の `logs/`（PDF は `build/logs/`）を作ってそこに出す。 |

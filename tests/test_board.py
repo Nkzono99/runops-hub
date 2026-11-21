@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -74,12 +75,17 @@ class BoardTest(unittest.TestCase):
             page, stale = self.board.build(self.hub, datetime.now().astimezone())
         self.assertEqual(stale, 0)
         for name in ("demo", "second"):
-            self.assertIn(f'href="#project-{name}"', page)
-            self.assertEqual(page.count(f'id="project-{name}"'), 1)
-        self.assertLess(page.index('class="lead"'), page.index("<figcaption>"))
-        self.assertLess(page.index("<figcaption>"), page.index('<img src='))
-        self.assertLess(page.index('<img src='), page.index("差は 0.4% 以内。"))
+            self.assertIn(f'href="#p-{name}"', page)
+            self.assertEqual(page.count(f'id="p-{name}"'), 1)
+            self.assertIn(f'href="#f-{name}-1"', page)
+            self.assertEqual(page.count(f'id="f-{name}-1"'), 1)
+        card = page[page.index('id="f-demo-1"'):]
+        self.assertLess(card.index('class="headline"'), card.index('<img src='))
+        self.assertLess(card.index('<img src='), card.index("差は 0.4% 以内。"))
+        self.assertLess(card.index("差は 0.4% 以内。"), card.index('<p class="howto">'))
+        self.assertIn("帯が目安", card[card.index('<p class="howto">'):])
         self.assertIn('aria-label="図を拡大:', page)
+        self.assertIn("分かっていること <span class=\"count\">4</span> 件", page)
 
     def test_a_row_selects_runs_by_directory_and_by_id(self) -> None:
         row = self.board.parse_board(TABLE)[0]["rows"][0]
@@ -130,7 +136,8 @@ class BoardTest(unittest.TestCase):
         ]
         page, stale = self.board.render_line(line, runs, "projects/demo/analysis", self.hub)
         self.assertEqual(stale, 1)
-        self.assertIn('<p class="lead">効かない。</p>', page)
+        self.assertIn('<h4 class="headline">効かない。</h4>', page)
+        self.assertIn('<p class="point">差は 0.4% 以内。</p>', page)
         self.assertIn('src="data:image/png;base64,', page)
         self.assertIn("帯が目安", page)
         self.assertIn("この答えのあとに完了した計算が 1 本", page)
@@ -142,6 +149,90 @@ class BoardTest(unittest.TestCase):
         runs = [run("R20261105-0007", "runs/scan/open", "completed", "2026-11-06T13:00:00+09:00")]
         page, _ = self.board.render_line(line, runs, "projects/demo/analysis", self.hub)
         self.assertIn('接合なしでも同じか<span class="tag">計算は完了、解析待ち</span>', page)
+
+    def test_the_short_columns_make_the_card_and_the_full_answer_is_folded(self) -> None:
+        short = TABLE.replace(
+            "| 問い | いまの答え | 図 | 対象 run | 読む場所 | 確認日 |\n|---|---|---|---|---|---|\n| 高さは効くか |",
+            "| 問い | 見出し | 要点 | 条件 | いまの答え | 図 | 対象 run | 読む場所 | 確認日 |\n"
+            "|---|---|---|---|---|---|---|---|---|\n| 高さは効くか | 高さは電荷を変えない | 差は **0.4% 以内** | 単一 seed、定常前 |", 1)
+        line = self.board.parse_board(short)[0]
+        self.assertEqual(line["rows"][0]["見出し"], "高さは電荷を変えない")
+        page, _ = self.board.render_line(line, [], "projects/demo/analysis", self.hub, ["f-demo-1"])
+        self.assertIn('<h4 class="headline">高さは電荷を変えない</h4>', page)
+        self.assertIn('<p class="point">差は <strong>0.4% 以内</strong></p>', page)
+        self.assertIn('<p class="cond">単一 seed、定常前</p>', page)
+        folded = page[page.index("<details"):page.index("</details>")]
+        self.assertIn("効かない。差は 0.4% 以内。", folded)
+        self.assertIn("R20261105-0009", folded)
+        self.assertIn('id="f-demo-1"', page)
+        # a row without the short columns keeps its first sentence as the headline
+        self.assertIn('<h4 class="headline">0.25 s で収束する。</h4>', page)
+
+    def test_the_setting_is_read_before_the_lines_and_under_a_line(self) -> None:
+        text = TABLE.replace("<!-- board -->", "<!-- board -->\n- 表示名: シースの柱\n- 模式図: ![柱と上端](setting/s.png)\n\n"
+                             "| 計算の設定 | 値 |\n|---|---|\n| コード | 3D EMSES |\n| 格子 | 0.5 m |\n")
+        text = text.replace("- 論文: `papers/sheath`", "- 論文: `papers/sheath`\n\n| 設定 | 値 |\n|---|---|\n| 接合 | あり、2 s/batch |\n")
+        self.assertEqual(self.board.preamble(text), {"表示名": "シースの柱", "模式図": "![柱と上端](setting/s.png)"})
+        self.assertEqual(self.board.preamble_setting(text), [("コード", "3D EMSES"), ("格子", "0.5 m")])
+        line = self.board.parse_board(text)[0]
+        self.assertEqual(line["setting"], [("接合", "あり、2 s/batch")])
+        self.assertEqual([row["問い"] for row in line["rows"]], ["高さは効くか", "幅は効くか", "接合なしでも同じか"])
+        page, _ = self.board.render_line(line, [], "projects/demo/analysis", self.hub)
+        self.assertIn('<th scope="row">接合</th><td>あり、2 s/batch</td>', page)
+        self.assertLess(page.index('class="paper"'), page.index('class="setting"'))
+        out = self.project / "analysis" / "setting"
+        out.mkdir(parents=True)
+        header = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x0dIHDR"
+        (out / "s.png").write_bytes(header + (900).to_bytes(4, "big") + (1000).to_bytes(4, "big"))
+        block = self.board.render_setting(self.board.preamble(text), self.board.preamble_setting(text), "計算の設定",
+                                          "projects/demo/analysis", self.hub)
+        self.assertIn('<div class="setting side">', block)
+        self.assertIn('data-title="計算の設定"', block)
+        self.assertLess(block.index("<img"), block.index('<th scope="row">コード</th>'))
+        self.assertEqual(self.board.render_setting({}, [], "計算の設定", "projects/demo/analysis", self.hub), "")
+
+    def test_the_overview_lists_claims_then_open_questions_in_the_hub_table_order(self) -> None:
+        second = member(self.hub, "second")
+        for project in (self.project, second):
+            (project / "analysis").mkdir(parents=True)
+            (project / "analysis" / "README.md").write_text(TABLE, encoding="utf-8")
+        (self.hub / "AGENTS.md").write_text(
+            "| dir | simulator | 内容 |\n|---|---|---|\n| `projects/second/` | emses | 二つ目 |\n| `projects/demo/` | beach | 一つ目 |\n",
+            encoding="utf-8")
+        with patch.object(self.board, "load_runs", return_value=[]), patch.object(self.board.st, "HUB", self.hub):
+            page, _ = self.board.build(self.hub, datetime.now().astimezone())
+        start = page.index('<nav class="overview"')
+        overview = page[start:page.index("</nav>", start)]
+        self.assertLess(overview.index('<span class="tile-name">second</span>'), overview.index('<span class="tile-name">demo</span>'))
+        tile = overview[overview.index('<span class="tile-name">demo</span>'):]
+        self.assertTrue(overview.startswith('<nav class="overview" aria-label="テーマごとの結論"><details class="tile"><summary>'))
+        self.assertIn("分かっていること 2・まだ 2", tile[:tile.index("</summary>")])
+        self.assertLess(tile.index('<a href="#f-demo-1">効かない。</a>'), tile.index('<li class="ask">接合なしでも同じか'))
+        self.assertIn('href="#p-demo"', tile)
+        self.assertIn("二つ目", overview)
+        # one tab per theme after the overview, in the same order; each theme is a view with links to its neighbours
+        start = page.index('<nav class="tabs"')
+        tabs = page[start:page.index("</nav>", start)]
+        self.assertEqual(re.findall(r'data-tab="([^"]+)"', tabs), ["overview", "second", "demo"])
+        self.assertIn('<span class="tab-count">結論 2・問い 2</span>', tabs)
+        self.assertIn('id="p-demo" data-view="demo" data-title="demo"', page)
+        self.assertIn('id="overview" data-view="overview"', page)
+        demo = page[page.index('id="p-demo"'):]
+        self.assertIn('<a class="prev" href="#p-second">← second</a><a href="#overview">一覧</a><span></span>', demo)
+
+    def test_an_upright_figure_sits_beside_its_text(self) -> None:
+        out = self.project / "analysis" / "scan" / "out"
+        out.mkdir(parents=True)
+        header = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x0dIHDR"
+        (out / "a.png").write_bytes(header + (1000).to_bytes(4, "big") + (1100).to_bytes(4, "big"))
+        self.assertEqual(self.board.image_size(out / "a.png"), (1000, 1100))
+        line = self.board.parse_board(TABLE)[0]
+        page, _ = self.board.render_line(line, [], "projects/demo/analysis", self.hub)
+        self.assertIn('<article class="card side"', page)
+        self.assertIn('width="1000" height="1100"', page)
+        (out / "a.png").write_bytes(header + (2000).to_bytes(4, "big") + (800).to_bytes(4, "big"))
+        page, _ = self.board.render_line(line, [], "projects/demo/analysis", self.hub)
+        self.assertIn('<article class="card wide"', page)
 
 
 if __name__ == "__main__":
