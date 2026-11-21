@@ -39,6 +39,19 @@ archive/projects/NAME, archive/papers/NAME     完了・停止（./hub archive�
 - `slides/` の card と表に `projects/NAME/…` と link 経由で書かれた path は、外すときに実体の絶対 path へ書き換えます（`out/`・`logs/` は作り直されるので触りません）。`./hub slides add` が書く `from`・`read` は、はじめから実体の path です。hub の file から project・論文の中を指すときは、手で書くときも実体の path にします。
 - 待ち・実行中の job がある project は、status から消えるので `--force` なしでは外せません。外した project を `./hub detach` すると symlink と shelf の記録が消えます。
 
+## 論文の区分（投稿・進捗）
+
+`papers/` の論文（paperops project）は、論文の `paper.toml` の `[paper] track` で 2 つに分けます。hub の `AGENTS.md` の
+論文の表には、「内容」の先頭に「区分: 投稿。」のように写します（表の見出しは `./hub archive` などが探すので変えません）。
+
+| 区分 | `track` | 主張・発見・本文の変更 | 結果が予想に答えたとき | 定常性・収束などの上乗せの確認 |
+|---|---|---|---|---|
+| 投稿 | `submission` | 推奨案を添えて著者に見せ、答えを待つ | 答え合わせを提案し、原稿は依頼を受けてから直す | 省かない |
+| 進捗 | `progress` | 推奨案を反映し、論文の `LOG.md` に変えたこと・理由・採らなかった案を残して報告する | 判定から原稿の更新まで進める | BRIEF の「これから要る計算」に「投稿前」として積む |
+
+投稿すると決めたら `submission` に替え、積んだ確認を著者に見せます。simulation の投入、push、release は、どちらの区分でも
+事前に確認します。論文の中での規則は paperops（`track` を扱う版）の管理区間と `pops context` が示します。
+
 ## `./hub status` の 2 つの表示
 
 - **前回の確認以降に状態が変わった run**: 状態は実行のたびに `.hub/status_seen.json` に残ります。`--peek` は残さないため、エージェントが作業の途中で状態を見ても、人への報告の差分が消えません。

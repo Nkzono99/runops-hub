@@ -46,9 +46,9 @@ class ShelfTest(unittest.TestCase):
         (self.hub / "papers" / name).symlink_to(f"../../paper-{name}")
         agents = self.hub / "AGENTS.md"
         text = agents.read_text(encoding="utf-8")
-        if "| dir | source |" not in text:
-            text += PAPERS_TABLE
-        agents.write_text(text + row + "\n", encoding="utf-8")
+        if "| dir | source |" not in text:  # a hub made before the template had the papers table
+            agents.write_text(text + PAPERS_TABLE, encoding="utf-8")
+        self.assertEqual(load("projects", self.hub).put_row(self.hub, f"papers/{name}", row), "")
         return real
 
     def agents(self) -> str:

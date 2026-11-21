@@ -61,6 +61,36 @@ project の追加・作成、runops の準備、以後の操作は agent が行�
 
 `./hub` は読み取りと保守のための道具で、run を変える `runo` は対象 project の中で実行する。
 
+## 論文
+
+`papers/` には paperops project（論文 1 本を書く repository）への symlink を置く。hub が受け持つのは、論文と、
+その結果の出どころである project との間の受け渡しである。
+
+| dir | source | 内容 |
+|---|---|---|
+
+- **論文の作業は論文の中で行う。** `cd papers/<name>` し、その `AGENTS.md` と `pops context` に従う。主張・図・本文の
+  決定は論文の `LOG.md` と `BRIEF.md` に書く。source は論文の `paper.toml` の `[[sources]]` が決め、上の表はその写し。
+  paper-* skill は論文の directory にあるので、session の一覧に無ければ `papers/<name>/.claude/skills/` から読む。
+- **論文には区分がある。** 論文の `paper.toml` の `[paper] track` が決め、上の表の「内容」の先頭に「区分: 投稿。」の形で写す。
+  - **投稿**（`submission`）: 投稿を目指して書く論文。主張・発見・載せないもの、それに関わる本文の変更は、推奨案を添えて
+    著者に見せ、答えを待つ。結果が予想に答えたら、答え合わせを提案する。確認は省かない。
+  - **進捗**（`progress`）: 進捗を、投稿を意識した論文の形でまとめておく論文。推奨案は agent が反映し、論文の `LOG.md` に
+    変えたこと・理由・採らなかった案を残して報告する。答え合わせは原稿の更新まで進め、定常性や収束などの上乗せの
+    確認は BRIEF の「これから要る計算」に「投稿前」として積む。
+
+  論文を加えるときに区分を決める（分からなければ聞く）。投稿すると決めたら `submission` に替え、積んだ確認を BRIEF に
+  並べて見せる。どちらの区分でも、simulation の投入、push、release は事前に確認する。
+- **論文が求める計算は、hub が source の project へ運ぶ。** `pops context` の「残っている予想」や図に足りない解析が出たら、
+  source の project で計画を作り、論文のどの発見・図のためかを添えて投入を確認する。source の `LOG.md` には
+  依頼元の論文を path で書く。source の結果が予想に答えたら、区分に従って答え合わせにつなぐ。
+- **並列作業の単位は、図 1 枚（`figures/<name>/`）と節 1 つ（`manuscript/sections/` の file）。** `BRIEF.md`、
+  `numbers.tex`、`refs.bib` を同時に書く agent は 1 つにする。論文は git repository なので、一区切りごとに自身の変更を
+  path を指定して commit する。
+
+論文を加えるときは `ln -s <実体への相対 path> papers/<name>` し、上の表に行を足して（表は手で保つ）`./hub relink` を
+実行する。一旦手を離す論文は `./hub archive papers/<name>`（再開予定なら `defer`）で外す。
+
 ## 自動運用（hub auto）
 
 `./hub auto` のループは、`auto/config.toml` で有効にした project を一定間隔で `runo sync` し、完了・失敗から
