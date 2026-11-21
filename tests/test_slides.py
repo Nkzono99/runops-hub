@@ -124,6 +124,23 @@ class SlidesTest(unittest.TestCase):
         self.assertIn("- 表示名: 高さの研究", index)
         self.assertIn("| `height` | 新規 |", index)
 
+    def test_the_short_columns_of_a_board_row_are_left_as_a_draft(self) -> None:
+        readme = self.hub / "projects" / "alpha" / "analysis" / "README.md"
+        text = readme.read_text(encoding="utf-8")
+        text = text.replace("| 問い | いまの答え |", "| 問い | 見出し | 要点 | 条件 | いまの答え |")
+        text = text.replace("|---|---|---|---|---|---|", "|---|---|---|---|---|---|---|---|---|")
+        text = text.replace("| 高さは効くか | 効かない。", "| 高さは効くか | 高さは電荷を変えない | 差は **0.4% 以内**。 | 単一 seed。 | 効かない。")
+        text = text.replace("| 幅は効くか | 0.25 s", "| 幅は効くか | | | | 0.25 s")
+        text = text.replace("| 接合なしでも同じか | |", "| 接合なしでも同じか | | | | |")
+        readme.write_text(text, encoding="utf-8")
+        s = self.slides
+        self.call(s.cmd_new, "20261127", "--title", "個別ミーティング", "--presenter", "誰か")
+        self.call(s.cmd_add, "20261127", "height", "--section", "alpha", "--board", "高さは効くか")
+        raw = self.card("20261127", "height").read_text(encoding="utf-8")
+        tomllib.loads(raw)                                 # the draft stays valid TOML
+        self.assertIn("#   見出し: 高さは電荷を変えない\n#   要点: 差は **0.4% 以内**。\n#   条件: 単一 seed。\n", raw)
+        self.assertIn("#   効かない。", raw)
+
     def test_a_figure_from_a_paper_is_recorded_by_its_real_path(self) -> None:
         s = self.slides
         paper = self.hub.parent / "paper-x"

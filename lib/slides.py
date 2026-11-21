@@ -757,7 +757,10 @@ def cmd_add(argv: list[str]) -> int:
             if not path.is_file():
                 die(f"the figure of the board row is missing: {path}")
             figures.append(path.resolve())
-        notes = commented("board の答え（ここから主張を 1〜2 文にする。数値は文に並べず、図に載せる）:", row[bd.ANSWER])
+        short = [f"{key}: {row[key]}" for key in (bd.HEADLINE, bd.POINT, bd.CONDITIONS) if row.get(key, "").strip()]
+        notes = ("# board の見出し・要点・条件（title・found・limits の下書きに使える）:\n"
+                 + "".join(f"#   {line}\n" for line in short)) if short else ""
+        notes += commented("board の答え（ここから主張を 1〜2 文にする。数値は文に並べず、図に載せる）:", row[bd.ANSWER])
         if how:
             notes += commented("図の読み方（段や曲線の名前は [[figures.marks]] の label で図に書く）:", how)
         read = bd.LINK_RE.search(row.get(bd.READ, ""))
