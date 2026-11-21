@@ -33,6 +33,7 @@ packages = ["src/runops_hub"]
 "lib/projects.py" = "runops_hub/_runtime/lib/projects.py"
 "lib/relink.py" = "runops_hub/_runtime/lib/relink.py"
 "lib/sessions.py" = "runops_hub/_runtime/lib/sessions.py"
+"lib/shelf.py" = "runops_hub/_runtime/lib/shelf.py"
 "lib/status.py" = "runops_hub/_runtime/lib/status.py"
 "lib/slides.py" = "runops_hub/_runtime/lib/slides.py"
 "skills" = "runops_hub/_runtime/skills"

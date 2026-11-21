@@ -49,6 +49,7 @@ Linux 上で Git と [uv](https://docs.astral.sh/uv/getting-started/installation
 | 新しく計算を始める | 月面のダスト帯電を調べたい。既存 project で扱えるか見て、必要なら作って |
 | 更新する | hub 本体と各 project の runops を最新にして |
 | 完了した計算の解析と追加計算を任せる | `projects/crater` を hub auto の対象にして（以後は `./hub auto start` で定期実行） |
+| 一覧から外す | 試しに作った `projects/trial_x` は後回しにして。投稿した `papers/sheath` は archive して |
 
 対象や目的が不足するときはエージェントが確認し、計算の投入は各 project の規則に従います。
 裏で動く `./hub` コマンドの詳細は [コマンド・運用リファレンス](docs/reference.md) にあります。

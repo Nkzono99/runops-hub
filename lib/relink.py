@@ -8,6 +8,9 @@ identical). The skills that ship with the hub itself (`skills/` beside this
 directory, e.g. hub-slides) are linked the same way; a member skill of the same name wins. Only symlinks under .claude/skills and .agents/skills are managed;
 a real directory there is left alone and reported.
 
+Members and papers set aside (./hub defer / archive) do not count for the skills, but stay in the
+working directories, so their data can still be read and edited from the hub without prompts.
+
 Working directories: members and papers/* are symlinks to directories outside the hub,
 so Claude Code counts their files as outside the working directory and asks before
 every write, even in auto mode. relink keeps `permissions.additionalDirectories` in
@@ -26,7 +29,7 @@ import os
 import sys
 from pathlib import Path
 
-from projects import member_paths
+from projects import member_paths, paper_paths
 
 try:
     import tomllib
@@ -135,12 +138,11 @@ def apply(changes: list[tuple]) -> None:
 def work_dirs(mems: list[Path]) -> list[str]:
     """Real paths an agent working from the hub writes to: members, papers/*, this repository.
 
+    MEMS are the members to include (relink passes those set aside too). Papers set aside stay.
     A path inside the hub is already part of the working directory and is left out.
     """
     paths = [m.resolve() for m in mems]
-    papers = HUB / "papers"
-    if papers.is_dir():
-        paths += [p.resolve() for p in sorted(papers.iterdir()) if p.is_dir() and not p.name.startswith(".")]
+    paths += [p.resolve() for p in paper_paths(HUB, shelved=True)]
     paths.append(REPO)
     out: list[str] = []
     for p in paths:
@@ -192,7 +194,7 @@ def main(argv: list[str]) -> int:
     mems = members()
     chosen, notes = choose(mems)
     changes, warnings = plan(chosen)
-    wanted = work_dirs(mems)
+    wanted = work_dirs(member_paths(HUB, shelved=True))
     new_settings, added, removed, dirs_error = plan_dirs(wanted)
     if dirs_error:
         warnings.append(dirs_error)
@@ -206,6 +208,10 @@ def main(argv: list[str]) -> int:
     for e in chosen.values():
         groups.setdefault((e["source"], e["version"], e["member"]), []).append(e["name"])
     print(f"members: {', '.join(m.name for m in mems)}")
+    aside = sorted({m.name for m in member_paths(HUB, shelved=True)} - {m.name for m in mems})
+    aside += [f"papers/{p.name}" for p in paper_paths(HUB, shelved=True) if p not in paper_paths(HUB)]
+    if aside:
+        print(f"  set aside (no skills taken; working directories kept): {', '.join(aside)}")
     for (source, version, member), names in sorted(groups.items()):
         print(f"  {source} {version} <- {member} ({len(names)} skills)")
         if verbose:

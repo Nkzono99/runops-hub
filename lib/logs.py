@@ -4,7 +4,7 @@ import fcntl
 import os
 from pathlib import Path
 
-from projects import member_paths
+from projects import member_paths, paper_paths
 import re
 import subprocess
 import sys
@@ -34,10 +34,9 @@ def finished_jobs(job_ids):
 
 
 def project_roots(hub):
+    """Member projects and papers in use; those set aside (./hub shelf) are left out."""
     roots = member_paths(hub)
-    papers = hub / "papers"
-    if papers.is_dir():
-        roots.extend(p for p in papers.iterdir() if (p / "paper.toml").is_file())
+    roots.extend(p for p in paper_paths(hub) if (p / "paper.toml").is_file())
     return sorted(roots)
 
 

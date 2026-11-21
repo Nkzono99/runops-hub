@@ -55,7 +55,7 @@ if str(LIB) not in sys.path:
     sys.path.insert(0, str(LIB))
 
 import status as hubstatus  # noqa: E402  (finished runs nothing records, as ./hub status finds them)
-from projects import member_paths  # noqa: E402
+from projects import member_paths, shelved_projects  # noqa: E402
 
 CODE = LIB.parent
 TEMPLATES = CODE / "templates"
@@ -257,10 +257,11 @@ def load_config() -> dict:
 def project_settings(config: dict, name: str) -> dict | None:
     """What auto does in project NAME, or None when it is not enabled.
 
-    Keys left out of a hand-written table mean: analyse, but submit nothing.
+    Keys left out of a hand-written table mean: analyse, but submit nothing. A project set aside
+    in the hub (./hub defer / archive) counts as not enabled until ./hub restore; its table stays.
     """
     table = config["projects"].get(name)
-    if not isinstance(table, dict) or not table.get("enabled", True):
+    if not isinstance(table, dict) or not table.get("enabled", True) or name in shelved_projects(HUB):
         return None
     return {
         "analyze": bool(table.get("analyze", True)),
@@ -301,7 +302,8 @@ def set_project_table(name: str, table: dict | None) -> None:
 # ---------------------------------------------------------------- members and runs
 
 def members() -> dict[str, Path]:
-    return {path.name: path.resolve() for path in member_paths(HUB)}
+    """Every member, with those set aside: what auto submitted there still counts and can be cancelled."""
+    return {path.name: path.resolve() for path in member_paths(HUB, shelved=True)}
 
 
 def member(name: str) -> Path:
@@ -792,7 +794,9 @@ def gate(config: dict, name: str, project: Path, run_ids: list[str], kind: str,
     """The submissions RUN_IDS would make, and every reason they may not. Submits nothing."""
     problems: list[str] = []
     settings = project_settings(config, name)
-    if settings is None:
+    if settings is None and name in shelved_projects(HUB):
+        problems.append(f"{name} is set aside in the hub (./hub shelf); ./hub restore {name} first")
+    elif settings is None:
         problems.append(f"{name} is not enabled in auto/config.toml")
     elif kind in ("continue", "derive") and not settings[kind]:
         problems.append(f"{kind} is off for {name} in auto/config.toml; propose it instead")
@@ -1790,9 +1794,11 @@ def summary_lines() -> list[str]:
     config = load_config()
     spent = usage(config)
     lines = [describe_loop().replace("loop:", "hub auto:", 1)]
+    aside = sorted(n for n in shelved_projects(HUB) if isinstance(config["projects"].get(n), dict))
     lines.append(f"  week: {spent['total']:,.0f}/{config['budget']['total']:,} core-h, "
                  f"cores now {spent['active_cores']}/{config['budget']['max_cores']}; "
-                 f"projects: {', '.join(enabled(config)) or 'none'}")
+                 f"projects: {', '.join(enabled(config)) or 'none'}"
+                 + (f" (set aside, skipped: {', '.join(aside)})" if aside else ""))
     for item in claims():
         lines.append(f"  claimed (leave alone): {item['project']}/{item['run']} by {item['holder']} until {hm(item['until'])}")
     events = ledger()

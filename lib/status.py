@@ -9,6 +9,8 @@ than 2.7), each run's manifest, and ``LOG.md``, ``notes/`` and the analysis repo
 It never runs ``runo sync``; run ``./hub sync`` first for fresh states. The only thing it
 writes is ``.hub/status_seen.json``, the run statuses at the last look. ``--peek`` leaves
 that mark in place, for an agent that checks states in the middle of its own work.
+Projects set aside (``./hub defer`` / ``archive``) are skipped and named in one line; their
+last-look statuses are kept, so ``./hub restore`` does not show every run as changed.
 """
 from __future__ import annotations
 
@@ -22,7 +24,7 @@ from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
 
-from projects import member_paths
+from projects import member_paths, shelf_line, shelved_projects
 
 # The hub directory (members, AGENTS.md, .hub/ state). ./hub exports it; run by hand, it is the cwd.
 HUB = Path(os.environ.get("RUNOPS_HUB_DIR") or Path.cwd()).resolve()
@@ -307,9 +309,14 @@ def main() -> int:
         print("\nno active runs")
     print_changes(load_seen(), statuses)
     print_unconcluded(unwritten)
+    shelf = shelf_line(HUB)
+    if shelf:
+        print("\n" + shelf)
     print_auto()
     if mark and status == 0:
-        save_seen(statuses)
+        seen = load_seen().get("runs", {})
+        kept = {name: seen[name] for name in shelved_projects(HUB) if name in seen and name not in statuses}
+        save_seen({**kept, **statuses})
     return status
 
 

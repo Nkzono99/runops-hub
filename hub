@@ -12,6 +12,9 @@
 #   ./hub new NAME SIM... --desc TEXT          create ../project_NAME with runo init and add it
 #   ./hub attach NAME PATH SIM... --desc TEXT  add an existing runops project
 #   ./hub detach NAME        drop a finished project from the hub (symlink only)
+#   ./hub defer TARGET [--why TEXT] [--until DATE]   set a project or paper aside to come back to
+#   ./hub archive TARGET [--why TEXT]   set a finished or stopped one aside (link and data stay)
+#   ./hub restore TARGET     bring it back      ./hub shelf     list what is set aside (lib/shelf.py)
 #   ./hub term NAME          open (or re-attach) the tmux session for one project
 #   ./hub sessions           show direct tmux/claude/codex sessions per project (this node)
 #   ./hub logs [DIR [--apply]]  list job log locations or collect loose logs in DIR/logs/
@@ -24,7 +27,7 @@
 set -u
 code=$(dirname "$(readlink -f "$0")")
 cmd=${1:-}
-usage='usage: ./hub {list|context|sync|doctor|update|status|board|relink|new|attach|detach|term|sessions|logs|slides|auto} [args]
+usage='usage: ./hub {list|context|sync|doctor|update|status|board|relink|new|attach|detach|shelf|defer|archive|restore|term|sessions|logs|slides|auto} [args]
        <repo>/hub init DIR'
 
 # lib/*.py need Python >= 3.11. Prefer the interpreter recorded by uvx init, then
@@ -101,6 +104,8 @@ case "$cmd" in
   logs) shift; "$PY" "$code/lib/logs.py" "$@"; exit $? ;;
   slides) shift; "$PY" "$code/lib/slides.py" "$@"; exit $? ;;
   auto) shift; "$PY" "$code/lib/auto.py" "$@"; exit $? ;;
+  shelf) shift; "$PY" "$code/lib/shelf.py" list "$@"; exit $? ;;
+  defer|archive|restore) "$PY" "$code/lib/shelf.py" "$@" && relink; exit $? ;;
   term|detach)
     name=${2:-}
     name=${name%/}
@@ -195,6 +200,8 @@ for link in "${links[@]}"; do
   echo "===== $name ($(readlink -f "$link"))"
   (cd "$link" && runo "$@") || { echo "!! $name: runo $cmd failed (exit $?)"; status=1; }
 done
+# What is set aside is skipped above; say so once, so it is not forgotten.
+projects shelf-line
 # The board is derived from what sync just refreshed; a failure here does not fail the sync.
 if [ "$cmd" = sync ]; then
   "$PY" "$code/lib/board.py" --quiet || echo "!! board.html was not rewritten (exit $?)"

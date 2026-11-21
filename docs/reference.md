@@ -10,6 +10,9 @@ run の作成・投入・中止など状態を変える `runo` コマンドは�
 | `./hub attach NAME PATH SIM... --desc TEXT` | 既存の runops project を `projects/` に加える |
 | `./hub new NAME SIM... --desc TEXT` | `../project_NAME` に新しい project を作って加える |
 | `./hub detach NAME` | hub から外す（symlink と表の行だけを消す。実体は残る） |
+| `./hub defer TARGET [--why TEXT] [--until DATE]` | project か論文を「後回し」として一覧から外す（下の「外す・戻す」） |
+| `./hub archive TARGET [--why TEXT]` | 完了・停止した project か論文を一覧から外す |
+| `./hub restore TARGET` / `./hub shelf` | 外したものを戻す / 外したものを一覧する |
 | `./hub sync` / `list [--json]` / `context` / `doctor` / `update` | 全 project で同じ `runo` を実行する（`sync` のたびに `board.html` も再生成） |
 | `./hub status [--peek]` | 全 project の件数と active run、前回の確認以降に状態が変わった run、完了後に記録が無い run |
 | `./hub board` | `board.html` を hub directory に生成する（試作） |
@@ -19,6 +22,15 @@ run の作成・投入・中止など状態を変える `runo` コマンドは�
 | `./hub sessions` | この node で各 project に開いている tmux・claude・codex |
 | `./hub term NAME` | project の tmux session に入る |
 | `./hub auto [status\|start\|pause\|resume\|stop\|tick\|enable\|...]` | 定期実行の agent（下の「定期実行の agent」）。`./hub auto help` で command 一覧 |
+
+## 外す・戻す（`./hub defer` / `archive` / `restore` / `shelf`）
+
+試しに作った project や一旦終えた論文を、消さずに一覧から外します。`defer` は「後回し」（また戻る）、`archive` は「完了・停止」です。TARGET は `NAME`・`projects/NAME`・`papers/NAME` で、project と論文に同じ名前があるときは前に付けて区別します。
+
+- 外したものは `./hub list`・`context`・`sync`・`doctor`・`update`・`status`・`board`・`sessions`・`logs` に出ず、skill の和集合にも数えません。hub auto もその project では tick も投入もしません（`auto/config.toml` は残すので、戻せば再開します）。
+- `projects/NAME`・`papers/NAME` の link と実体はそのままなので、LOG やスライドに書いた path は使えます。Claude Code の作業 directory にも残すため、hub から読み書きするときに確認は出ません。
+- hub の `AGENTS.md` の表の行は `.hub/shelf.toml` に移り、`restore` で表の末尾に戻ります。`./hub status` と `./hub list` の最後に `shelf: deferred 1 (trial_x until 12-01), archived 2 — ./hub shelf` のような 1 行が出ます。`--until` の日を過ぎた後回しには `due` が付きます。
+- 待ち・実行中の job がある project は、status から消えるので `--force` なしでは外せません。外した project を `./hub detach` すると shelf の記録も消えます。
 
 ## `./hub status` の 2 つの表示
 

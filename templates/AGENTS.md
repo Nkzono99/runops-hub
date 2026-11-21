@@ -37,6 +37,8 @@ project の追加・作成、runops の準備、以後の操作は agent が行�
 - **記録は project に置く。** run の観察、結論、知見はその project の `runo note`・`LOG.md`・`notes/` に書く。
   run id は project ごとの番号なので、別 project の run は path で参照する。
 - **全体を見るときは `./hub`。** 「全部の進捗を見て」は `./hub sync` → `./hub status` で答える。
+- **外したもの（`./hub shelf`）は名指しされたときだけ扱う。** path は変わらないので読むのはそのままでよい。
+  run を投入・継続するなら先に `./hub restore` する（外したままだと sync・status・auto に出ない）。
 
 | command | 用途 |
 |---|---|
@@ -51,6 +53,7 @@ project の追加・作成、runops の準備、以後の操作は agent が行�
 | `./hub new NAME SIM... --desc TEXT` | 新しい project（`../project_NAME`）を作って hub に加える |
 | `./hub attach NAME PATH SIM... --desc TEXT` | 既にある runops project を hub に加える |
 | `./hub detach NAME` | 終了した project を hub から外す（symlink と表の行を消す。実体は残る） |
+| `./hub defer TARGET [--why TEXT] [--until DATE]` / `archive TARGET [--why TEXT]` / `restore TARGET` / `shelf` | 後回しにする project・論文（`defer`）と、完了・停止したもの（`archive`）を一覧と各 command から外す。link と実体と path はそのままで、表の行は `.hub/shelf.toml` に移る。`restore` で戻し、`shelf` で外したものを見る。TARGET は `NAME`・`projects/NAME`・`papers/NAME`。待ち・実行中の job がある project は `--force` が要る |
 | `./hub term NAME` | 人が使う。project の tmux session に入る（無ければ作る） |
 | `./hub auto [status\|start\|pause\|resume\|stop\|tick\|enable\|...]` | 定期実行の agent（下の「自動運用」）。command は `./hub auto help` |
 
