@@ -78,6 +78,8 @@ def choose(mems: list[Path]) -> tuple[dict[str, dict], list[str]]:
         for e in entries:
             if e is best:
                 continue
+            if e.get("hash") and e.get("hash") == best.get("hash"):
+                continue  # same content under another label (e.g. a project-local adapter's "local")
             if version_key(e["version"]) < version_key(best["version"]):
                 notes.append(f"{name}: {e['member']} has {e['version']}, {best['member']} has {best['version']}")
             elif e["version"] == best["version"] and e.get("hash") != best.get("hash"):

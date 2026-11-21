@@ -98,6 +98,19 @@ class HubTest(unittest.TestCase):
         relink.apply(relink.plan(chosen)[0])
         self.assertEqual(os.readlink(self.hub / ".claude" / "skills" / "runops-x"), "../../projects/b/.claude/skills/runops-x")
 
+    def test_relink_does_not_report_skew_for_the_same_content_under_a_local_label(self) -> None:
+        for name, version in (("a", "local"), ("b", "4.22.1")):
+            project = member(self.hub, name)
+            (project / ".runops").mkdir()
+            (project / ".runops" / "skills.lock").write_text(
+                f'[[skills]]\nname = "sim-x"\nversion = "{version}"\nsource = "sim"\nhash = "same"\n',
+                encoding="utf-8",
+            )
+        relink = load("relink", self.hub)
+        chosen, notes = relink.choose(relink.members())
+        self.assertEqual(chosen["sim-x"]["member"], "b")
+        self.assertEqual(notes, [])
+
     def test_relink_keeps_the_real_paths_of_members_and_papers_as_working_directories(self) -> None:
         project = member(self.hub, "a")
         paper = self.hub.parent / "paper-x"
