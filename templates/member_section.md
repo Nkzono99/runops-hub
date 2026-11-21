@@ -6,6 +6,11 @@ This project is also reachable from the hub at `{hub}`
 - Several agents can work here at once when each owns its own runs, cases and
   `notes/<topic>.md`. Add to `LOG.md` with `cat >> LOG.md <<'EOF'`; appends from
   different agents do not overwrite each other.
+- When this project is a git repository, commit the files you changed once a piece of
+  work is done, staging them by path (no need to ask), and leave other agents' work in
+  progress out. If hub auto's records (`[auto]` entries in `LOG.md`, notes by hub-auto,
+  analysis files it made) are uncommitted, commit them separately. Simulation outputs and
+  large files stay out of git (list them in `.gitignore`). Push only when the user asks.
 - Decide reversible things yourself and report them: the analysis method and figures,
   conclusions in `LOG.md`, notes and analysis READMEs, the wording of board rows and
   reports, and any choice you can recommend. Go with your recommendation, list what you

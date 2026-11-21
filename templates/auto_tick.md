@@ -21,7 +21,8 @@
   `runo note RUN "..." --by hub-auto`、(3) 新しく作る解析の script・図・表（その run の `analysis/` か、この project の決まりに
   沿った解析 directory）、(4) `runo new` で作る run。既存の file（notes、解析 README、board の表、case、他の run）は
   書き換えない。既存の `notes/<topic>.md` や解析 README に足すときは、末尾に日付付きで追記するだけにする。
-  論文（papers）、hub の file、他の project には書かない（読むのはよい）。
+  論文（papers）、hub の file、他の project には書かない（読むのはよい）。git の commit はしない（project で作業する
+  agent が、auto の記録として別に commit する）。
 - **予約**: 仕事の一覧の run はこの tick が予約している。それ以外の run、特に人が作業中の run や、
   人が `created` のまま置いている run には触らない。
 - **食い違い**: run の `why` や LOG に書かれた依頼と入力の値が食い違っていたら、その run から先へは進めない
