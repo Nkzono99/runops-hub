@@ -347,7 +347,8 @@ class AutoTest(unittest.TestCase):
 
     def test_the_member_note_goes_into_the_hub_section(self) -> None:
         agents = self.project / "AGENTS.md"
-        agents.write_text("# p\n\n## runops hub\n\n- first rule\n\n## local rules\n\n- keep\n", encoding="utf-8")
+        agents.write_text("# p\n\n## runops hub\n\n- first rule; hub auto commits after each tick\n\n"
+                          "## local rules\n\n- keep\n", encoding="utf-8")
         self.assertTrue(self.auto.add_member_note(self.project))
         self.assertFalse(self.auto.add_member_note(self.project))
         text = agents.read_text(encoding="utf-8")

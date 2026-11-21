@@ -1973,7 +1973,8 @@ def add_member_note(path: Path) -> bool:
     """Put the hub auto note into the member's ``## runops hub`` section (once)."""
     agents = path / "AGENTS.md"
     text = agents.read_text(encoding="utf-8") if agents.is_file() else ""
-    if "hub auto" in text:
+    # Look for the note itself: the hub section mentions hub auto in other rules too.
+    if "hub auto may visit this project" in text:
         return False
     note = MEMBER_NOTE.format(hub=HUB)
     lines = text.splitlines()
