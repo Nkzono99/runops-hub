@@ -69,6 +69,7 @@ TEXT_WARN = 80                 # characters of look + found + open on one slide
 NUMBER_WARN = 2                # numbers in that text; more than this belongs in the figure
 FIGURE_WARN = 0.60             # figure area with text, relative to the same figure alone on the slide
 TABLE_SIZES = (20, 18, 16, 14, 12)     # a table is set in the largest of these that fits
+TABLE_NOWRAP_MIN = 16                  # below this size, wrapping cells is better than shrinking further
 NUMBER_CELL = re.compile(r"^[+\-−]?\d+(?:[.,]\d+)?\s*%?$")
 FONTS = ("Noto Sans CJK JP", "Noto Sans JP", "Hiragino Sans", "Yu Gothic")
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
@@ -88,7 +89,7 @@ def preamble(font: str) -> str:
 #let key(s) = text(fill: accent, weight: "bold", s)
 #let title(body) = text(size: {TITLE_PT}pt, weight: "light", body)
 #let mq(id, w, body) = context [#metadata((id: id, w: w, h: measure(width: w * 1pt, body).height.pt())) <m>]
-#let mt(id, size, body) = context [#metadata((id: id, s: size, w: measure(body).width.pt(), h: measure(body).height.pt())) <t>]
+#let mt(id, size, body) = context {{ let m = measure(width: {PAGE_W - 2 * MX}pt, body); let n = measure(body); [#metadata((id: id, s: size, w: m.width.pt(), h: m.height.pt(), wn: n.width.pt(), hn: n.height.pt())) <t>] }}
 """
 
 
@@ -316,7 +317,8 @@ def choose_layout(page: dict, heights: dict[float, float]) -> dict:
 
 def table_typst(rows: list[list[str]], size: int) -> str:
     """A ruled table: the first row is the header, columns of numbers are right-aligned, and a
-    thin rule separates groups when the first column repeats (``**cell**`` takes the accent)."""
+    thin rule separates groups when the first column repeats (``**cell**`` takes the accent).
+    Long cells wrap: the table is measured inside the width of the slide."""
     head, body = rows[0], [r + [""] * (len(rows[0]) - len(r)) for r in rows[1:]]
     n = len(head)
     def numeric(c: int) -> bool:
@@ -337,12 +339,17 @@ def table_typst(rows: list[list[str]], size: int) -> str:
 
 
 def table_layout(text_h: float, sizes: dict[int, tuple[float, float]]) -> dict:
-    """A table alone on the slide, centred, with the text under it; the largest type that fits."""
+    """A table alone on the slide, centred, with the text under it. ``sizes[pt]`` is (width, height)
+    with cells wrapped to the slide, optionally followed by the same without wrapping. The largest
+    type that fits without wrapping is used when it is at least TABLE_NOWRAP_MIN; otherwise cells wrap."""
     aw, ah = PAGE_W - 2 * MX, BOTTOM - TOP
     room = ah - (text_h + GAP if text_h else 0.0)
-    size = next((s for s in TABLE_SIZES if sizes[s][0] <= aw and sizes[s][1] <= room), None)
+    size = next((s for s in TABLE_SIZES if s >= TABLE_NOWRAP_MIN and sizes[s][-2] <= aw and sizes[s][-1] <= room), None)
+    wrapped = size is None
+    if wrapped:
+        size = next((s for s in TABLE_SIZES if sizes[s][0] <= aw and sizes[s][1] <= room), None)
     fits = size is not None
-    w, h = sizes[size or TABLE_SIZES[-1]]
+    w, h = sizes[size or TABLE_SIZES[-1]][:2] if wrapped else sizes[size][-2:]
     y = TOP + max(0.0, (room - h) / 3)
     lay = {"mode": "table", "table": (MX + max(0.0, (aw - w) / 2), y, size or TABLE_SIZES[-1]), "fits": fits}
     if text_h:
@@ -392,7 +399,7 @@ def page_typst(page: dict, lay: dict, number: int, root: Path) -> str:
         out.append(f"#at({x:.1f}, {y:.1f})[#box(width: {fw:.1f}pt, height: {fh:.1f}pt)[#place(top + left, image({lit(rel(page['figure'], root))}, width: {fw:.1f}pt, height: {fh:.1f}pt, fit: \"stretch\")){marks}]]")
     if "table" in lay:
         x, y, size = lay["table"]
-        out.append(f"#at({x:.1f}, {y:.1f})[{table_typst(page['table'], size)}]")
+        out.append(f"#at({x:.1f}, {y:.1f})[#block(width: {PAGE_W - 2 * MX - (x - MX):.1f}pt)[{table_typst(page['table'], size)}]]")
     if "text" in lay:
         x, y, tw, _ = lay["text"]
         out.append(f"#at({x:.1f}, {y:.1f})[#block(width: {tw:.1f}pt)[\n{text_block(page['text'])}]]")
@@ -401,21 +408,48 @@ def page_typst(page: dict, lay: dict, number: int, root: Path) -> str:
     return "\n".join(out)
 
 
-def front_typst(meta: dict, sections: list[dict], pages: list[dict]) -> str:
-    """The title page, and what was done this time: the new cards of each section."""
-    out = ["#page[#align(center + horizon)[",
-           f"#text(size: 48pt, weight: \"light\", {lit(meta.get('題', '進捗報告'))})\\",
-           f"#v(6pt)#text(size: 22pt, {lit('　'.join(x for x in (meta.get('日付', ''), meta.get('発表者', '')) if x))})",
-           "]]", "#page[", f"#at({MX}, {TITLE_Y})[#title[今回行ったこと]]", f"#at({MX + 10}, {TOP + 12})[#block(width: {PAGE_W - 2 * MX - 20}pt)["]
+AGENDA_Y = TOP + 12            # top of the list on the page "今回行ったこと"
+AGENDA_W = PAGE_W - 2 * MX - 20
+AGENDA_GAP, AGENDA_GUTTER = 10.0, 30.0
+AGENDA_HALF = (AGENDA_W - AGENDA_GUTTER) / 2
+
+
+def agenda_blocks(sections: list[dict], pages: list[dict]) -> list[str]:
+    """What was done this time: one block per section, listing its new cards."""
+    blocks = []
     for sec in sections:
         name = sec["meta"].get("表示名", sec["name"])
         new = [p for p in pages if p["section"] == name and p["kind"] != "recap" and p["first"]]
-        if not new:
-            continue
-        subs = ", ".join(f"[#text(size: 18pt, {lit(p['card_title'])})]" for p in new)
-        out.append(f"#list(marker: [•], spacing: 10pt, [#text(size: 24pt, {lit(name)}) #list(marker: [–], spacing: 8pt, {subs})])")
-        out.append("#v(10pt)")
-    out += ["]]", "]"]
+        if new:
+            subs = ", ".join(f"[#text(size: 18pt, {lit(p['card_title'])})]" for p in new)
+            blocks.append(f"#list(marker: [•], spacing: 10pt, [#text(size: 24pt, {lit(name)}) #list(marker: [–], spacing: 8pt, {subs})])")
+    return blocks
+
+
+def agenda_columns(full: list[float], half: list[float]) -> tuple[list[list[int]], bool]:
+    """Which blocks go in which column, and whether they fit: one column when it fits, else the
+    split into two (in order) whose taller column is the shortest."""
+    room = BOTTOM - AGENDA_Y
+    tall = lambda hs: sum(hs) + AGENDA_GAP * max(0, len(hs) - 1)
+    n = len(full)
+    if tall(full) <= room or n < 2:
+        return [list(range(n))], tall(full) <= room
+    k = min(range(1, n), key=lambda k: max(tall(half[:k]), tall(half[k:])))
+    return [list(range(k)), list(range(k, n))], max(tall(half[:k]), tall(half[k:])) <= room
+
+
+def front_typst(meta: dict, blocks: list[str], columns: list[list[int]]) -> str:
+    """The title page, and the page of what was done this time."""
+    out = ["#page[#align(center + horizon)[",
+           f"#text(size: 48pt, weight: \"light\", {lit(meta.get('題', '進捗報告'))})\\",
+           f"#v(6pt)#text(size: 22pt, {lit('　'.join(x for x in (meta.get('日付', ''), meta.get('発表者', '')) if x))})",
+           "]]", "#page[", f"#at({MX}, {TITLE_Y})[#title[今回行ったこと]]"]
+    width = AGENDA_W if len(columns) == 1 else AGENDA_HALF
+    for c, members in enumerate(columns):
+        x = MX + 10 + c * (AGENDA_HALF + AGENDA_GUTTER)
+        body = f"\n#v({AGENDA_GAP}pt)\n".join(blocks[k] for k in members)
+        out.append(f"#at({x:.1f}, {AGENDA_Y})[#block(width: {width:.1f}pt)[\n{body}\n]]")
+    out.append("]")
     return "\n".join(out)
 
 
@@ -472,6 +506,10 @@ def cmd_build(argv: list[str]) -> int:
     # Pass 1: measure every text block at every width it may get, and every title.
     aw = PAGE_W - 2 * MX
     probe = [head, f'#mq("ref", {aw}, title[あ])']
+    agenda = agenda_blocks(sections, pages)
+    for k, block in enumerate(agenda):
+        probe.append(f'#mq("agenda/{k}", {AGENDA_W}, [\n{block}])')
+        probe.append(f'#mq("agenda/{k}", {AGENDA_HALF}, [\n{block}])')
     for p in pages:
         shown = rich(p["title"]) or '#"";'
         probe.append(f"#mq({lit(p['id'] + '/title')}, {title_width(p):.1f}, title[{shown}])")
@@ -491,10 +529,14 @@ def cmd_build(argv: list[str]) -> int:
     tables: dict[str, dict[int, tuple[float, float]]] = {}
     if any(p.get("table") for p in pages):
         for m in json.loads(run(typst + ["query"] + common + [str(out / "measure.typ"), "<t>", "--field", "value"]).stdout):
-            tables.setdefault(m["id"], {})[int(m["s"])] = (m["w"], m["h"])
+            tables.setdefault(m["id"], {})[int(m["s"])] = (m["w"], m["h"], m.get("wn", m["w"]), m.get("hn", m["h"]))
 
     # Pass 2: place everything.
-    body, report = [head, front_typst(meta, sections, pages)], []
+    columns, fits = agenda_columns([heights[f"agenda/{k}"][AGENDA_W] for k in range(len(agenda))],
+                                   [heights[f"agenda/{k}"][AGENDA_HALF] for k in range(len(agenda))])
+    if not fits:
+        problems.append("「今回行ったこと」が2列でも収まらない。新規の card のタイトルを短くするか、節をまとめる")
+    body, report = [head, front_typst(meta, agenda, columns)], []
     covers = meta.get("節の表紙", "あり").strip() not in ("なし", "無し", "no", "off")
     n, opened = 2, None
     for p in pages:

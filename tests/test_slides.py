@@ -159,6 +159,23 @@ class SlidesTest(unittest.TestCase):
         short, more = s.choose_layout(wide, heights), s.choose_layout(wide, {**heights, 880.0: 300.0})
         self.assertGreater(short["fig"][2] * short["fig"][3], more["fig"][2] * more["fig"][3])
 
+    def test_a_long_list_of_what_was_done_goes_into_two_columns(self) -> None:
+        s = self.slides
+        room = s.BOTTOM - s.AGENDA_Y
+        self.assertEqual(s.agenda_columns([100.0, 100.0], [110.0, 110.0]), ([[0, 1]], True))
+        columns, fits = s.agenda_columns([200.0, 120.0, 150.0, 90.0], [200.0, 130.0, 150.0, 100.0])
+        self.assertEqual((columns, fits), ([[0, 1], [2, 3]], True))      # 340 / 260 beats 200 / 400
+        self.assertFalse(s.agenda_columns([room, room, room], [room, room, room])[1])
+        blocks = s.agenda_blocks([{"name": "a", "meta": {"表示名": "A"}}, {"name": "b", "meta": {}}],
+                                 [{"section": "A", "kind": "new", "first": True, "card_title": "結果"},
+                                  {"section": "A", "kind": "recap", "first": True, "card_title": "おさらい"},
+                                  {"section": "b", "kind": "new", "first": False, "card_title": "続き"}])
+        self.assertEqual(len(blocks), 1)
+        self.assertIn('"結果"', blocks[0])
+        self.assertNotIn("おさらい", blocks[0])
+        page = s.front_typst({"題": "題"}, ["#A;", "#B;"], [[0], [1]])
+        self.assertEqual(page.count(f"#block(width: {s.AGENDA_HALF:.1f}pt)"), 2)
+
     def test_text_reaches_typst_as_literals_and_marks_as_placed_shapes(self) -> None:
         s = self.slides
         self.assertEqual(s.rich('a "b" **key** #c'), '#"a \\"b\\" ";#key("key");#" #c";')
@@ -228,6 +245,10 @@ class SlidesTest(unittest.TestCase):
         rows = [["a", "b"]] + [["x", "1"]] * 3
         self.assertEqual(s.table_layout(0.0, {z: (40.0 * z, 30.0 * z) for z in s.TABLE_SIZES})["table"][2], 14)
         self.assertFalse(s.table_layout(0.0, {z: (90.0 * z, 30.0 * z) for z in s.TABLE_SIZES})["fits"])
+        wide = {z: (880.0, 9.0 * z, 60.0 * z, 5.0 * z) for z in s.TABLE_SIZES}     # wraps at 20 and 18, fits unwrapped at 14
+        self.assertEqual(s.table_layout(0.0, wide)["table"][2], 20)                 # 14 is below the floor: wrap at 20
+        fair = {z: (880.0, 9.0 * z, 50.0 * z, 5.0 * z) for z in s.TABLE_SIZES}     # fits unwrapped at 16
+        self.assertEqual(s.table_layout(0.0, fair)["table"][2], 16)
         self.assertIn("columns: 2", s.table_typst(rows, 16))
 
     def test_an_archived_deck_keeps_the_library_cards_it_used(self) -> None:
