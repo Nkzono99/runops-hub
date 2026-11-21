@@ -10,7 +10,7 @@ This project is also reachable from the hub at `{hub}`
   conclusions in `LOG.md`, notes and analysis READMEs, the wording of board rows and
   reports, and any choice you can recommend. Go with your recommendation, list what you
   decided at the end of the report, and write the reason and the options not taken in
-  `LOG.md`. Do not write how to undo it. Ask about simulation submits that need
+  `LOG.md`. Ask about simulation submits that need
   confirmation, push, release, deletion, changes to the claims of a submission-track
   paper, and results that no agreed branch covers.
 - A run follows the track of the paper it answers. The tracks are in the paper table of
