@@ -41,6 +41,18 @@ project の追加・作成、runops の準備、以後の操作は agent が行�
   run を投入・継続するなら先に `./hub restore` する（外したままだと sync・status・auto に出ない）。
 - **hub の file から project・論文の中の file を指すときは、実体の絶対 path で書く。** `projects/<name>/…` の
   link は `./hub archive`・`defer` で動く。
+- **戻せる判断は agent が決めて報告する。** 解析の方法と図、LOG・note・解析 README の結論、board と報告の書き方、
+  agent が推奨を出せる選択は、推奨で進め、報告の最後に決めたことを 1 行ずつ示す。理由と採らなかった案は `LOG.md` に
+  書く。戻し方は書かない。聞くのは、確認が要る simulation の投入、push・release・削除、投稿の論文の主張に関わる変更、
+  事前の分岐に無い結果。
+- **run は、それが答える論文の区分に従う。** 区分は下の「論文」の表にある。どの論文のための run かは `why` に書く。
+  投稿の論文のための run は確認を省かない。進捗の論文のための run と、どの論文にも使わない run では、主張の柱に
+  要らない定常・収束・seed の確認は計算せず、`LOG.md` に「投稿前」として残す。
+- **事前に決めた分岐は、結果が出たら実行する。** 「こうなったらこうする」を、run を作るときは `why` に、投入の確認の
+  ときは `runo note` に書く。結果が条件に当たったら、解析・LOG・進捗の論文の更新までは聞かずに進める。分岐に
+  simulation が要るなら、親の run の投入確認で条件と core-h の上限も見せ、承認されたら
+  `runo note RUN "分岐（承認 YYYY-MM-DD、上限 N core-h）: …"` を残す。条件に当たり、見積もりが上限以内なら確認せずに
+  投入して報告する。当否がはっきりしないときと、上限を超えるときは聞く。
 
 | command | 用途 |
 |---|---|
@@ -95,7 +107,8 @@ project の追加・作成、runops の準備、以後の操作は agent が行�
 
 `./hub auto` のループは、`auto/config.toml` で有効にした project を一定間隔で `runo sync` し、完了・失敗から
 しばらくたっても記録の無い run があれば、project ごとに `codex exec` を起動して解析させ、明らかに必要な継続と
-小さい派生を週の予算内で投入させる。仕事が無い回は agent を起動しない。設定・状態・記録はすべて `auto/` にある。
+小さい派生を週の予算内で投入させる（seed の繰り返しと定常・収束の確認は、投稿の論文のための run だけ）。
+仕事が無い回は agent を起動しない。設定・状態・記録はすべて `auto/` にある。
 
 - **有効にする project は人が決める。** `./hub auto enable NAME [--no-continue] [--no-derive]` / `disable NAME`。
 - **auto の枠内の投入は承認済み。** 有効な project で `hub auto submit` の検査（`auto/config.toml` の予算、継続の条件、
